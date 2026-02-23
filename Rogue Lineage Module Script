@@ -1008,6 +1008,7 @@ local function teachskill(p, info, firstcheck)
 			table.insert(skills,chosenskill)
 			data.Skills.Value = table.concat(skills,",")
 			commands.Learn(p)
+			commands.UpdateSkills(p)
 
 			if info.ultra and not info.isultra then
 				game:GetService("BadgeService"):AwardBadge(p.UserId, 02126741603)
@@ -1023,6 +1024,49 @@ local function teachskill(p, info, firstcheck)
 		return "max"
 	end
 	return "poor"
+end
+
+commands["Learn"] = function(p)
+	local c
+	if p:IsA("Model") then 
+		c = p
+		p = game.Players:GetPlayerFromCharacter(c)
+	else	
+		c = p.Character or p.CharacterAdded:Wait()
+	end
+
+	-- Wrapped in task.spawn so it NEVER freezes the NPC dialogues if a sound is missing!
+	task.spawn(function()
+		local root = c:FindFirstChild("HumanoidRootPart")
+		if root then
+			local sound = root:FindFirstChild("Learn")
+			if sound then
+				sound:Play()
+			end
+		end
+
+		local head = c:FindFirstChild("Head")
+		local backpack = p:FindFirstChild("Backpack")
+		local manaColor = backpack and backpack:FindFirstChild("ManaColor")
+
+		if head and manaColor and game.ServerStorage.Assets:FindFirstChild("Learn") then
+			local attachment = game.ServerStorage.Assets.Learn:FindFirstChild("Attachment")
+			if attachment then
+				local l1 = attachment:Clone()
+				if l1:FindFirstChild("ParticleEmitter") then
+					l1.ParticleEmitter.Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, manaColor.Value),
+						ColorSequenceKeypoint.new(1, manaColor.Value),
+					})
+					l1.Parent = head
+					l1.ParticleEmitter:Emit(15)
+					task.delay(1.5, function()
+						if l1 then l1:Destroy() end
+					end)
+				end
+			end
+		end
+	end)
 end
 local dialogues = {
 	Snowman = {
@@ -11183,6 +11227,32 @@ dialogues["????"].v1 = function(player,v)
 				};
 			end
 			
+		end
+	end
+end
+dialogues.Fallion.v1 = function(p,v)
+	-- First page: Checks if they are allowed to learn from him
+	if v.page == 1 then
+		local teach = teachskill(p, classdata.Scholar, true)
+		if teach == "notmax" then
+			return dialogues.Fallion.p1
+		elseif teach == "max" then
+			return dialogues.Fallion.max
+		elseif teach == "no" then
+			return dialogues.Fallion.no
+		end
+
+		-- Second page: The payment prompt
+	elseif v.page == 2 then
+		return dialogues.Fallion.p2
+
+		-- Third page: Attempt to purchase and give the skill
+	elseif v.page == 3 then
+		local teach = teachskill(p, classdata.Scholar)
+		if teach == "gotskill" then
+			return dialogues.Fallion.p3
+		elseif teach == "poor" then
+			return dialogues.Fallion.poor
 		end
 	end
 end
