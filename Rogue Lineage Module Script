@@ -682,6 +682,7 @@ local classdata = {
 			"CurseShield",
 		},
 		price = 80,
+		xp = 0,
 	},
 	Botanist = {
 		skills = {
