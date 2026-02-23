@@ -528,7 +528,59 @@ commands["UpdateAppearance"] = function(Player, playlearnsound)
 			c.Weld.Part1 = c
 		end
 
+	elseif Race == "Seraph" or Race == "GreaterSeraph" or Race == "LunarSeraph" then
+		-- [[ BULLETPROOF HALO WELDING ]]
+		local HaloUnion = game.ServerStorage.Assets:FindFirstChild("SeraphHalo")
+		if HaloUnion then
+			local clone = HaloUnion:Clone()
+			clone.Name = "SeraphHalo"
+			clone.CanCollide = false
+			clone.Anchored = false
+			clone.Massless = true
 
+			-- Parent it directly to the Head
+			clone.Parent = Character:WaitForChild("Head")
+
+			-- Create a manual weld so it never falls off
+			local weld = Instance.new("Weld")
+			weld.Part0 = Character.Head
+			weld.Part1 = clone
+			weld.C0 = CFrame.new(0, 0.8, 0) -- Increase 0.8 to move it higher!
+			weld.Parent = clone
+
+			-- Glow with the player's Mana Color
+			clone.Color = Color3.fromRGB(Data.ManaColor.Value.r, Data.ManaColor.Value.g, Data.ManaColor.Value.b)
+			clone.Material = Enum.Material.Neon
+		end -- [[ ADDED THE MISSING END HERE! ]]
+
+		-- [[ SERAPH WINGS SETUP ]]
+		local WingMesh = game.ServerStorage.Assets:FindFirstChild("SeraphWings")
+
+		if WingMesh then
+			local WingsClone = WingMesh:Clone()
+			WingsClone.Name = "SeraphWings"
+			WingsClone.CanCollide = false
+			WingsClone.Anchored = false
+			WingsClone.Massless = true
+
+			-- Parent the wings to the Torso instead of the Head
+			WingsClone.Parent = Character:WaitForChild("Torso")
+
+			-- Weld them securely to the back
+			local WingWeld = Instance.new("Weld")
+			WingWeld.Part0 = Character.Torso
+			WingWeld.Part1 = WingsClone
+
+			-- [[ ADJUST WING POSITION HERE ]]
+			-- Z pushes them backward off the torso, Y moves them up/down
+			WingWeld.C0 = CFrame.new(0, 0.5, 0.6) 
+			WingWeld.Parent = WingsClone
+
+			-- Make them glow with the player's mana color (FIXED 'data' to 'Data')
+			WingsClone.Color = Color3.fromRGB(Data.ManaColor.Value.r, Data.ManaColor.Value.g, Data.ManaColor.Value.b)
+			WingsClone.Material = Enum.Material.Neon
+		end
+		
 	elseif Race == "Demon"then
 		local c = Assets.AkazaHair:Clone()
 		c.Parent = WaitForChild(Character,"Head")
@@ -718,7 +770,7 @@ commands["UpdateAppearance"] = function(Player, playlearnsound)
 		end
 	end
 
-	if Race == "Gaian"or Race == "Seraph" or Race == "GreaterSeraph" or Race == "LunarSeraph" or Race == "Dullahan" or Race == "Deva1" or Race == "Cameo"or Race=="Lich" or Race== "Metascroom" or Character:FindFirstChild("LichSummon") or Race== "Dracula" or Race == "Adamina" or Race == "Hero" then
+	if Race == "Gaian"or Race == "Seraph" or Race == "GreaterSeraph" or Race == "LunarSeraph" or Race == "Dullahan" or Race == "Deva1" or Race == "Cameo"or Race=="Lich" or Race== "Metascroom" or Character:FindFirstChild("LichSummon") or Race== "Dracula" or Race == "Adamina" or Race == "Hero" or Race =="Construct" then
 		local v = Instance.new("BoolValue")
 		v.Name = "NoHunger"
 		v.Value = true
@@ -2006,18 +2058,6 @@ commands["RacialAbilities"] = function(Player,data)
 	local Race = data:WaitForChild("Race")
 	local Vampire = data:WaitForChild("Vampire")
 	local Area = data:WaitForChild("Area")
-	local has4 = Player.Backpack:FindFirstChild("CurseShield")
-	if not has4 then
-		Classes.CurseShield:Clone().Parent = Player.Backpack
-	end
-	local has5 = Player.Backpack:FindFirstChild("FastCasting")
-	if not has5 then
-		Classes.FastCasting:Clone().Parent = Player.Backpack
-	end
-	local has6 = Player.Backpack:FindFirstChild("WiseCasting")
-	if not has6 then
-		Classes.WiseCasting:Clone().Parent = Player.Backpack
-	end
 	if Race.Value == "Madrasian" then
 
 		local has = Player.Backpack:FindFirstChild("Shift") or Player.Character:FindFirstChild("Shift")
@@ -2070,6 +2110,10 @@ commands["RacialAbilities"] = function(Player,data)
 		local has2 = Player.Backpack:FindFirstChild("FeatherFall")or Player.Character:FindFirstChild("FeatherFall")
 		if not has2 then
 			Classes["FeatherFall"]:Clone().Parent = Player.Backpack
+		end
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
 		end
 		local has3 = Player.Backpack:FindFirstChild("IronBody")
 		if not has3 then
@@ -2147,6 +2191,10 @@ commands["RacialAbilities"] = function(Player,data)
 				RacialAbilities.Overcharge:Clone().Parent = Player.Backpack
 			end
 		end
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
+		end
 		local has2 = Player.Backpack:FindFirstChild("TrainedCombat")
 		if not has2 then
 			RacialAbilities.TrainedCombat:Clone().Parent = Player.Backpack
@@ -2202,6 +2250,10 @@ commands["RacialAbilities"] = function(Player,data)
 		if not has then
 			game.ServerStorage.Classes["Soul Rip"]:Clone().Parent = Player.Backpack
 		end
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
+		end
 		if Player.Character.Boosts:FindFirstChild("ColdResist") and Player.Character.Boosts.ColdResist:FindFirstChild("Armor") then
 			Player.Character.Boosts.ColdResist.Value = 0.25
 		else
@@ -2223,6 +2275,10 @@ commands["RacialAbilities"] = function(Player,data)
 			colderes.Parent = Player.Character.Boosts
 		end
 	elseif CheckRace2(Race, "TrueCameo")then
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
+		end
 		local FeatherFall = Instance.new("Accessory")
 		FeatherFall.Name = "FeatherFall"
 		FeatherFall.Parent = Player.Backpack
@@ -2251,6 +2307,10 @@ commands["RacialAbilities"] = function(Player,data)
 			end
 		end
 	elseif CheckRace2(Race, "Gingerbread") then
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
+		end
 		if data.DaysSurvived.Value>=3 then
 			local has = Player.Backpack:FindFirstChild("Kaspa's Sack")or Player.Character:FindFirstChild("Kaspa's Sack")
 			if not has then
@@ -2334,23 +2394,42 @@ commands["RacialAbilities"] = function(Player,data)
 		if not has then
 			RacialAbilities["Vagrant Soul"]:Clone().Parent = Player.Backpack
 		end
+
 		local has2 = Player.Backpack:FindFirstChild("SlashResistance")
 		if not has2 then
 			RacialAbilities["SlashResistance"]:Clone().Parent = Player.Backpack
 		end
+
 		local ironbody = Instance.new("ObjectValue")
 		ironbody.Value = Player.Character:WaitForChild("Left Arm")
 		ironbody.Name = "IronBody"
 		ironbody.Parent = Player.Character
+
 		local ironbody2 = Instance.new("ObjectValue")
 		ironbody2.Value = Player.Character:WaitForChild("Right Arm")
 		ironbody2.Name = "IronBody"
 		ironbody2.Parent = Player.Character
+
 		local has = PlayerDatas[Player.Name].Skills.Value:find("Gate")
 		if not has then
 			PlayerDatas[Player.Name].Skills.Value ..= ",Gate,DeepforestObelisk,DesertObelisk,ForestObelisk,ShoreObelisk,SigilObelisk,SnailObelisk,TundraObelisk"
 		end
-	elseif Race.Value == "Seraph" or Race.Value == "GreaterSeraph" or Race.Value == "LunarSeraph" and data.Lives.Value > 0 then
+
+		-- [[ ADD TOMELESS HERE ]]
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
+		end
+		
+	elseif (Race.Value == "Seraph" or Race.Value == "GreaterSeraph" or Race.Value == "LunarSeraph") and data.Lives.Value > 0 then
+
+		-- [[ TOMELESS PASSIVE ]]
+		local hasTomeless = PlayerDatas[Player.Name].Skills.Value:find("Tomeless")
+		if not hasTomeless then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Tomeless"
+		end
+
+		-- [[ ANGEL FALL & GATES ]]
 		task.spawn(function()
 			task.wait(5)
 			local SeraphIgnore = {
@@ -2362,9 +2441,22 @@ commands["RacialAbilities"] = function(Player,data)
 				["The Shaped Bazaar"] = true,
 				["The Shaped Arena"] = true,
 			}
+
 			if not SeraphIgnore[data.Area.Value] then
-				local has = Player.Backpack:FindFirstChild("Angel Fall")or Player.Character:FindFirstChild("Angel Fall")
-				if not has then
+				-- BUG FIX: Check if the character already fell this life!
+				local hasFallen = Player.Character:FindFirstChild("HasAngelFallen")
+
+				if not hasFallen then
+					-- Give them the tag so they NEVER fall again until they wipe/respawn
+					local fallenTag = Instance.new("BoolValue")
+					fallenTag.Name = "HasAngelFallen"
+					fallenTag.Parent = Player.Character
+
+					-- Give them the tool if they somehow don't have it
+					if not Player.Backpack:FindFirstChild("Angel Fall") and not Player.Character:FindFirstChild("Angel Fall") then
+						RacialAbilities["Angel Fall"]:Clone().Parent = Player.Backpack
+					end
+
 					local add = {
 						"NoFall",
 						"Stun",
@@ -2375,7 +2467,7 @@ commands["RacialAbilities"] = function(Player,data)
 						z.Name = v
 						z.Parent = Player.Character
 					end
-					RacialAbilities["Angel Fall"]:Clone().Parent = Player.Backpack
+
 					Player.Character:WaitForChild("HumanoidRootPart")
 					task.spawn(function()
 						for num = 1,10 do
@@ -2391,6 +2483,7 @@ commands["RacialAbilities"] = function(Player,data)
 					end)
 				end
 			end
+
 			local has = PlayerDatas[Player.Name].Skills.Value:find("Gate")
 			if not has then
 				PlayerDatas[Player.Name].Skills.Value ..= ",Gate,DeepforestObelisk,DesertObelisk,ForestObelisk,ShoreObelisk,SigilObelisk,SnailObelisk,TundraObelisk"
@@ -2463,17 +2556,33 @@ commands["RacialAbilities"] = function(Player,data)
 				Classes["TrapM2"]:Clone().Parent = Player.Backpack
 			end
 		end
-	elseif CheckRace2(Race, 'Morvid') then
+		
+	
+elseif CheckRace2(Race, 'Morvid') then
+		local has1 = Player.Backpack:FindFirstChild("TrainedCombat")
+		if not has1 then
+			RacialAbilities.TrainedCombat:Clone().Parent = Player.Backpack
+		end
+
 		local FeatherFall = Instance.new("Accessory")
 		FeatherFall.Name = "FeatherFall"
 		FeatherFall.Parent = Player.Backpack
-		if data.DaysSurvived.Value>=3 then
+
+		if data.DaysSurvived.Value>=15 then
 			local has = Player.Backpack:FindFirstChild("Flock")or Player.Character:FindFirstChild("Flock")
 			if not has then
 				RacialAbilities.Flock:Clone().Parent = Player.Backpack
 			end
 		end
-	elseif CheckRace2(Race, "Dracula") then
+
+		-- [[ ADDED BLOODSENSE TAG ]]
+		if not Player.Character:FindFirstChild("BloodSense") then
+			local bloodSense = Instance.new("BoolValue")
+			bloodSense.Name = "BloodSense"
+			bloodSense.Parent = Player.Character
+		end
+	
+elseif CheckRace2(Race, "Dracula") then
 		local FeatherFall = Instance.new("Accessory")
 		FeatherFall.Name = "FeatherFall"
 		FeatherFall.Parent = Player.Backpack
@@ -2487,11 +2596,6 @@ commands["RacialAbilities"] = function(Player,data)
 			if not has then
 				RacialAbilities.SlashResistance:Clone().Parent = Player.Backpack
 			end
-		end
-	elseif Race.Value == " "then
-		local has = Player.Backpack:FindFirstChild("Gate")or Player.Character:FindFirstChild("Gate")
-		if not has then
-			game.ServerStorage.Classes.Gate:Clone().Parent = Player.Backpack
 		end
 	elseif CheckRace2(Race, "Azael")then
 		local has = PlayerDatas[Player.Name].Skills.Value:find("Gate")
@@ -2543,6 +2647,7 @@ commands["RacialAbilities"] = function(Player,data)
 		if not has then
 			RacialAbilities.Rumor:Clone().Parent = Player.Backpack
 		end	
+
 	elseif Race.Value == "Capra" then
 		local has = Player.Backpack:FindFirstChild("Bash") or Player.Character:FindFirstChild("Bash")
 		if not has then
@@ -2554,19 +2659,36 @@ commands["RacialAbilities"] = function(Player,data)
 				Classes["BashM2"]:Clone().Parent = Player.Backpack
 			end
 	end
+
 	elseif CheckRace2(Race, "Dinakeri")then
 		local has = Player.Backpack:FindFirstChild("Soul Rip")or Player.Character:FindFirstChild("Soul Rip")
 		if not has then
 			game.ServerStorage.Classes["Soul Rip"]:Clone().Parent = Player.Backpack
 		end
 		game.ServerStorage.Classes.MasteredRune:Clone().Parent = Player.Backpack
+		
+	elseif Race.Value == "OGDinakeri"then
+		local has = Player.Backpack:FindFirstChild("Soul Rip")or Player.Character:FindFirstChild("Soul Rip")
+		if not has then
+			game.ServerStorage.Classes["Soul Rip"]:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("MasteredRune")or Player.Character:FindFirstChild("MasteredRune")
+		if not has2 then
+			game.ServerStorage.Classes.MasteredRune:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("WraithTraining")or Player.Character:FindFirstChild("WraithTraining")
+		if not has3 then
+			game.ServerStorage.Classes.WraithTraining:Clone().Parent = Player.Backpack
+		end
+		
 	elseif CheckRace2(Race, 'Hero') then
 		local has = Player.Backpack:FindFirstChild("Rally")or Player.Character:FindFirstChild("Rally")
 		if not has then
 			game.ServerStorage.RacialAbilities["Rally"]:Clone().Parent = Player.Backpack
 		end
 		game.ServerStorage.Classes.MasteredRune:Clone().Parent = Player.Backpack
-	elseif Race.Value == "LesserNavaran" or Race.Value == "Navaran" then
+	
+elseif Race.Value == "LesserNavaran" or Race.Value == "Navaran" then
 		local has = Player.Backpack:FindFirstChild("Emulate")or Player.Character:FindFirstChild("Emulate")
 		if not has then
 			game.ServerStorage.RacialAbilities.Emulate:Clone().Parent = Player.Backpack
@@ -2578,6 +2700,7 @@ commands["RacialAbilities"] = function(Player,data)
 			end
 		end
 	elseif CheckRace2(Race, 'Construct') then
+
 		local has = Player.Backpack:FindFirstChild("Galvanize")or Player.Character:FindFirstChild("Galvanize")
 		if not has then
 			game.ServerStorage.RacialAbilities.Galvanize:Clone().Parent = Player.Backpack
@@ -2610,7 +2733,8 @@ commands["RacialAbilities"] = function(Player,data)
 
 		end)
 
-	elseif CheckRace2(Race, 'GreaterFischeran') then
+	
+elseif CheckRace2(Race, 'GreaterFischeran') then
 		if data.DaysSurvived.Value>=5 then
 			local has = Player.Backpack:FindFirstChild("Dissolve")or Player.Character:FindFirstChild("Dissolve")
 			if not has then
@@ -2649,7 +2773,7 @@ commands["RacialAbilities"] = function(Player,data)
 end
 
 local allskillsspec = {
-	dsadadaa = true,
+	FrozenBindingDawn = true,
 	Taratect_Queen = true,
 	trashbard = true,
 	ROBLOX = true,
