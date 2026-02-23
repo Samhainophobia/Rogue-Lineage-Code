@@ -13,6 +13,50 @@ local GetChildren,GetDescendants = game.GetChildren,game.GetDescendants
 local FindFirstChild,WaitForChild = game.FindFirstChild,game.WaitForChild
 local PlayerData = game.ServerStorage.PlayerData:WaitForChild(Player.Name)
 local HumanoidRootPart = WaitForChild(Character,"HumanoidRootPart")
+-- [[ NEW: XP & MUTATION SYSTEM SETUP ]]
+-- [[ NEW: XP & MUTATION SYSTEM SETUP ]]
+if not PlayerData:FindFirstChild("XP") then
+	local xp = Instance.new("StringValue")
+	xp.Name = "XP"
+	xp.Value = 0
+	xp.Parent = PlayerData
+end
+
+if not PlayerData:FindFirstChild("Mutation") then
+	local mut = Instance.new("StringValue")
+	mut.Name = "Mutation"
+	mut.Value = "" -- Empty string means they haven't rolled yet
+	mut.Parent = PlayerData
+end
+
+-- If the mutation is completely blank, they are a fresh spawn. Roll their mutation!
+if PlayerData.Mutation.Value == "" then
+	local rng = math.random(1, 100)
+
+	if rng == 1 then
+		PlayerData.Mutation.Value = "Prodigy" -- 1% Chance: Gets 2x XP
+	elseif rng == 2 then
+		PlayerData.Mutation.Value = "Enlightened" -- 1% Chance: Snapping spells is much easier
+	elseif rng == 3 then
+		PlayerData.Mutation.Value = "Acrobat" -- 1% Chance: Takes massively reduced fall damage
+	else
+		PlayerData.Mutation.Value = "None" -- 97% Chance: Normal player. 
+	end
+
+	-- [[ WEBHOOK SENDER ]]
+	if PlayerData.Mutation.Value ~= "None" then
+		local Title = "🧬 Rare Mutation Rolled!"
+		local Content = "**" .. Player.Name .. "** has spawned with the **" .. PlayerData.Mutation.Value .. "** mutation!"
+		local Color = Color3.fromRGB(170, 0, 255) -- Purple embed color
+
+		-- Uses the built-in discord function from your player handler!
+		pcall(function()
+			shared.PostDiscordMessage(Title, Content, Color)
+		end)
+	end
+	-- [[ END WEBHOOK ]]
+end
+-- [[ END OF NEW SYSTEM ]]
 local TweenService = game:GetService("TweenService")
 local Humanoid = WaitForChild(Character,"Humanoid")
 local Boosts = WaitForChild(Character,"Boosts")
@@ -2092,6 +2136,13 @@ table.insert(Connections,
 		if Player.Backpack:FindFirstChild("FeatherFall")then
 			FallDamageReduction -= 1.5
 		end
+
+		-- [[ NEW: ACROBAT MUTATION CHECK ]]
+		if PlayerData:FindFirstChild("Mutation") and PlayerData.Mutation.Value == "Acrobat" then
+			FallDamageReduction -= 0.75 -- Reduces their fall damage drastically!
+		end
+		-- [[ END NEW ]]
+
 		for i,v in pairs(Boosts:GetChildren()) do
 			if v.Name == "FallResist" and v:IsA("IntValue") then
 				FallDamageReduction -= v.Value
@@ -4348,6 +4399,51 @@ table.insert(Connections,
 		elseif Child.Name == "Knocked"then
 			if not game.CollectionService:HasTag(Character, "Knocked") then
 				game.CollectionService:AddTag(Character, "Knocked")
+			end
+			-- [[ NEW: ADVANCED LIMB LOSS SYSTEM ]]
+			local shouldRollLimbLoss = false
+			local poser = Character:FindFirstChild("Poser") -- Checks who dealt the last damage
+
+			-- 1. Check if the attacker was a Shrieker or Howler
+			if poser then
+				local attackerName = string.split(poser.Value, ",")[1]
+				if attackerName and (string.find(attackerName, "Shrieker") or string.find(attackerName, "Howler")) then
+					shouldRollLimbLoss = true
+				end
+			end
+
+			-- 2. Check if a specific move tagged them for limb removal
+			if Character:FindFirstChild("SeveringStrikeHit") then
+				shouldRollLimbLoss = true
+				Character.SeveringStrikeHit:Destroy() -- Clean up the tag
+			end
+
+			-- Roll the 5% chance ONLY if one of the conditions above was met
+			if shouldRollLimbLoss then
+				if math.random(1, 100) <= 5 then
+					local injuriesList = string.split(PlayerData.Injuries.Value, ",")
+					if not table.find(injuriesList, "armless") then
+						if PlayerData.Injuries.Value == "" then
+							PlayerData.Injuries.Value = "armless"
+						else
+							PlayerData.Injuries.Value = PlayerData.Injuries.Value .. ",armless"
+						end
+
+						-- Optional: Make them bleed heavily when the arm comes off!
+						if Character:FindFirstChild("HumanoidRootPart") then
+							local blood = game.ServerStorage.Assets.BloodHit:Clone()
+							blood.Parent = Character.HumanoidRootPart
+							blood:Emit(40)
+						end
+					end
+				end
+			end
+			-- [[ END OF NEW SYSTEM ]]
+
+			unblock(Player)
+			local grab = FindFirstChild(Character,"Grabbing")
+			if grab then
+				Commands.CarryDrop(Character)
 			end
 			unblock(Player)
 			local grab = FindFirstChild(Character,"Grabbing")
