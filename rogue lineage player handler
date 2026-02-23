@@ -1100,18 +1100,27 @@ if not PlayerData:FindFirstChild("RevealedTo") then
 	rev.Value = ""
 	rev.Parent = PlayerData
 end
+-- [[ IDENTITY REVEAL SETUP ]]
+if not PlayerData:FindFirstChild("RevealedTo") then
+	local rev = Instance.new("StringValue")
+	rev.Name = "RevealedTo"
+	rev.Value = ""
+	rev.Parent = PlayerData
+end
 
--- Create a copy inside the Player object so LocalScripts can read it!
-local publicRevealed = Instance.new("StringValue")
-publicRevealed.Name = "RevealedTo"
-publicRevealed.Value = PlayerData.RevealedTo.Value
-publicRevealed.Parent = Player
+-- Check if it already exists to prevent duplicates every time the player respawns!
+local publicRevealed = Player:FindFirstChild("RevealedTo")
+if not publicRevealed then
+	publicRevealed = Instance.new("StringValue")
+	publicRevealed.Name = "RevealedTo"
+	publicRevealed.Value = PlayerData.RevealedTo.Value
+	publicRevealed.Parent = Player
 
--- Keep them synced
-publicRevealed.Changed:Connect(function(newVal)
-	PlayerData.RevealedTo.Value = newVal
-end)
--- [[ END IDENTITY SETUP ]]
+	-- Keep them synced
+	publicRevealed.Changed:Connect(function(newVal)
+		PlayerData.RevealedTo.Value = newVal
+	end)
+end
 
 if PlayerData.Class.Value == "Faceless" or PlayerData.Class.Value == "FriendlessOne" then
 	local FaceData = PlayerData.Face.Value
@@ -4888,27 +4897,171 @@ table.insert(Connections,
 					return
 				end
 			end
--- [[ IDENTITY REVEAL COMMAND ]]
-		if string.lower(msgtable[1]) == "/reveal" then
-			local myRevealed = Player:FindFirstChild("RevealedTo")
-			if myRevealed and Character and Character:FindFirstChild("HumanoidRootPart") then
-				-- Find everyone within 15 studs
-				for _, otherPlayer in pairs(game.Players:GetPlayers()) do
-					if otherPlayer ~= Player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
-						local distance = (Character.HumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).Magnitude
-						if distance <= 15 then
-							-- If they aren't already in the list, add their name!
-							if not myRevealed.Value:find(otherPlayer.Name) then
-								myRevealed.Value = myRevealed.Value .. otherPlayer.Name .. ","
-								
-								-- Optional: Fire a notification or chat message here to let them know it worked!
+			-- [[ 1. SERAPH CONCEAL/REVEAL COMMAND ]]
+			if string.lower(msgtable[2])=="conceal" then
+				local race = PlayerData.Race.Value
+				if race == "Seraph" or race == "GreaterSeraph" or race == "LunarSeraph" then
+					if Character:FindFirstChild("ConcealingActive") then return end -- Prevents spamming the command
+
+					if Character:FindFirstChild("ConcealedRace") then
+						-- Unconceal: Pulse highlight before revealing
+						local concealActive = Instance.new("BoolValue")
+						concealActive.Name = "ConcealingActive"
+						concealActive.Parent = Character
+
+						task.spawn(function()
+							-- Create the Highlight (Occluded means it won't show through walls!)
+							local hl = Instance.new("Highlight")
+							hl.Name = "RevealHighlight"
+							hl.FillColor = Player.Backpack:FindFirstChild("ManaColor") and Player.Backpack.ManaColor.Value or Color3.fromRGB(255, 255, 255)
+							hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+							hl.DepthMode = Enum.HighlightDepthMode.Occluded 
+							hl.FillTransparency = 1
+							hl.OutlineTransparency = 1
+							hl.Parent = Character
+
+							local ts = game:GetService("TweenService")
+							local ti = TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true)
+
+							-- Pulse 3 times rapidly
+							for i = 1, 3 do
+								local tw = ts:Create(hl, ti, {FillTransparency = 0.2, OutlineTransparency = 0})
+								tw:Play()
+								tw.Completed:Wait()
+							end
+
+							hl:Destroy()
+							Character.ConcealedRace:Destroy() -- Removes tag, triggering the script fades
+							concealActive:Destroy()
+						end)
+					else
+						-- Conceal immediately (Fades out smoothly via their scripts)
+						local concealTag = Instance.new("BoolValue")
+						concealTag.Name = "ConcealedRace"
+						concealTag.Parent = Character
+					end
+				end
+				return
+			end
+
+			-- [[ 2. SERAPH BESTOW HALO COMMAND ]]
+			if string.lower(msgtable[2])=="bestow" and msgtable[3] then
+				local race = PlayerData.Race.Value
+				if race == "Seraph" or race == "GreaterSeraph" or race == "LunarSeraph" then
+					local targetName = string.lower(msgtable[3])
+					local targetPlayer = nil
+
+					-- Find the target player
+					for _, p in pairs(game.Players:GetPlayers()) do
+						if string.lower(string.sub(p.Name, 1, #targetName)) == targetName then
+							targetPlayer = p
+							break
+						end
+					end
+
+					if targetPlayer and targetPlayer ~= Player and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+						local dist = (Character.HumanoidRootPart.Position - targetPlayer.Character.HumanoidRootPart.Position).Magnitude
+						if dist <= 15 then -- Must be close to the player
+
+							-- Clean up old bestow if they already gave it to someone else
+							if Player:FindFirstChild("BestowedTarget") then
+								local oldTarget = Player.BestowedTarget.Value
+								if oldTarget and oldTarget:FindFirstChild("SeraphBlessing") then
+									oldTarget.SeraphBlessing:Destroy()
+								end
+								Player.BestowedTarget:Destroy()
+							end
+
+							-- Tag target so the server remembers who has the halo
+							local targetTracker = Instance.new("ObjectValue")
+							targetTracker.Name = "BestowedTarget"
+							targetTracker.Value = targetPlayer.Character
+							targetTracker.Parent = Player
+
+							-- We group the buffs in one folder so we can delete them all at once later
+							local blessingFolder = Instance.new("Folder")
+							blessingFolder.Name = "SeraphBlessing"
+							blessingFolder.Parent = targetPlayer.Character
+
+							-- Walkspeed +2
+							local spd = Instance.new("NumberValue")
+							spd.Name = "SpeedBoost"
+							spd.Value = 2
+							spd.Parent = targetPlayer.Character:FindFirstChild("Boosts") or blessingFolder
+
+							-- Health +10 (Rogue uses percentages, so this calculates exactly 10 flat HP)
+							local hp = Instance.new("NumberValue")
+							hp.Name = "HealthBoost"
+							hp.Value = 10 / targetPlayer.Character.Humanoid.MaxHealth 
+							hp.Parent = targetPlayer.Character:FindFirstChild("Boosts") or blessingFolder
+
+							-- Give them the Halo!
+							local HaloUnion = game.ServerStorage.Assets:FindFirstChild("SeraphHalo")
+							if HaloUnion then
+								local clone = HaloUnion:Clone()
+								clone.Name = "SeraphHalo"
+								clone.CanCollide = false
+								clone.Anchored = false
+								clone.Massless = true
+								clone.Parent = targetPlayer.Character:WaitForChild("Head")
+
+								local weld = Instance.new("Weld")
+								weld.Part0 = targetPlayer.Character.Head
+								weld.Part1 = clone
+								weld.C0 = CFrame.new(0, 0.8, 0)
+								weld.Parent = clone
+
+								clone.Color = Color3.fromRGB(PlayerData.ManaColor.Value.r, PlayerData.ManaColor.Value.g, PlayerData.ManaColor.Value.b)
+								clone.Material = Enum.Material.Neon
+
+								-- This ensures the stats and halo are removed when the blessingFolder is destroyed
+								local destroyCon
+								destroyCon = blessingFolder.AncestryChanged:Connect(function()
+									if not blessingFolder:IsDescendantOf(game) then
+										if spd then spd:Destroy() end
+										if hp then hp:Destroy() end
+										if clone then clone:Destroy() end
+										destroyCon:Disconnect()
+									end
+								end)
 							end
 						end
 					end
 				end
+				return
 			end
-			return
-		end
+			local cmd = string.lower(msgtable[1])
+			if cmd == "/reveal" or cmd == "!reveal" then
+				local myRevealed = Player:FindFirstChild("RevealedTo")
+				if myRevealed and Character and Character:FindFirstChild("HumanoidRootPart") then
+					local revealedCount = 0
+
+					-- Find everyone within 25 studs
+					for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+						if otherPlayer ~= Player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+							local distance = (Character.HumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).Magnitude
+
+							if distance <= 25 then
+								-- Ensure exact matches so we don't accidentally reveal to someone with a similar name
+								local searchName = otherPlayer.Name .. ","
+								if not string.find(myRevealed.Value, searchName) then
+									myRevealed.Value = myRevealed.Value .. searchName
+									revealedCount = revealedCount + 1
+								end
+							end
+						end
+					end
+
+					-- Prints a confirmation in the F9 Server Console so you know it successfully fired!
+					if revealedCount > 0 then
+						print("[SYSTEM] " .. Player.Name .. " successfully revealed their name to " .. revealedCount .. " player(s)!")
+					else
+						print("[SYSTEM] No new players were close enough to reveal to.")
+					end
+				end
+				return
+			end
+			-- [[ END REVEAL ]]
 		-- [[ END REVEAL ]]
 			if string.lower(msgtable[2])=="sit" and not IsEmoting then
 				IsEmoting = true
@@ -5496,7 +5649,7 @@ table.insert(Connections,
 table.insert(Connections,
 	PlayerData.LastName.Changed:Connect(function()
 		wait()
-
+		
 		-- Hide the name on the server so strangers see ???
 		Humanoid.DisplayName = "???"
 
@@ -5516,13 +5669,13 @@ table.insert(Connections,
 table.insert(Connections,
 	PlayerData.FirstName.Changed:Connect(function()
 		wait()
-
+		
 		-- Hide the name on the server so strangers see ???
 		Humanoid.DisplayName = "???"
 
 		Player.leaderstats.LastName.Value = PlayerData.LastName.Value
 		Player.leaderstats.HouseRank.Value = PlayerData.HouseRank.Value
-
+		
 		game.ReplicatedStorage.Requests.NameChanged:FireClient(Player,
 			PlayerData.FirstName.Value,
 			PlayerData.UberTitle.Value,
@@ -5860,4 +6013,22 @@ wrap(function()
 		PlayerData.Temperature.Value = Character.Temperature.Value
 		PlayerData.Toxicity.Value = Character.Toxicity.Value
 	end
+	-- [[ SERAPH BESTOW CLEANUP ]]
+	local function RemoveBestow(plr)
+		if plr:FindFirstChild("BestowedTarget") then
+			local oldTarget = plr.BestowedTarget.Value
+			if oldTarget and oldTarget:FindFirstChild("SeraphBlessing") then
+				oldTarget.SeraphBlessing:Destroy() -- This strips the halo and stats off the friend instantly
+			end
+			plr.BestowedTarget:Destroy()
+		end
+	end
+
+	table.insert(Connections, Character:WaitForChild("Humanoid").Died:Connect(function()
+		RemoveBestow(Player)
+	end))
+
+	table.insert(Connections, Player.CharacterRemoving:Connect(function()
+		RemoveBestow(Player)
+	end))
 end)()
