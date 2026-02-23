@@ -16,7 +16,7 @@ local HumanoidRootPart = WaitForChild(Character,"HumanoidRootPart")
 -- [[ NEW: XP & MUTATION SYSTEM SETUP ]]
 -- [[ NEW: XP & MUTATION SYSTEM SETUP ]]
 if not PlayerData:FindFirstChild("XP") then
-	local xp = Instance.new("StringValue")
+	local xp = Instance.new("IntValue")
 	xp.Name = "XP"
 	xp.Value = 0
 	xp.Parent = PlayerData
@@ -1091,6 +1091,27 @@ if PlayerData.Class.Value == "Abysswalker" then
 	Skull2.Parent = Character["Torso"]
 
 end
+
+
+-- [[ IDENTITY REVEAL SETUP ]]
+if not PlayerData:FindFirstChild("RevealedTo") then
+	local rev = Instance.new("StringValue")
+	rev.Name = "RevealedTo"
+	rev.Value = ""
+	rev.Parent = PlayerData
+end
+
+-- Create a copy inside the Player object so LocalScripts can read it!
+local publicRevealed = Instance.new("StringValue")
+publicRevealed.Name = "RevealedTo"
+publicRevealed.Value = PlayerData.RevealedTo.Value
+publicRevealed.Parent = Player
+
+-- Keep them synced
+publicRevealed.Changed:Connect(function(newVal)
+	PlayerData.RevealedTo.Value = newVal
+end)
+-- [[ END IDENTITY SETUP ]]
 
 if PlayerData.Class.Value == "Faceless" or PlayerData.Class.Value == "FriendlessOne" then
 	local FaceData = PlayerData.Face.Value
@@ -4867,7 +4888,28 @@ table.insert(Connections,
 					return
 				end
 			end
-
+-- [[ IDENTITY REVEAL COMMAND ]]
+		if string.lower(msgtable[1]) == "/reveal" then
+			local myRevealed = Player:FindFirstChild("RevealedTo")
+			if myRevealed and Character and Character:FindFirstChild("HumanoidRootPart") then
+				-- Find everyone within 15 studs
+				for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+					if otherPlayer ~= Player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+						local distance = (Character.HumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).Magnitude
+						if distance <= 15 then
+							-- If they aren't already in the list, add their name!
+							if not myRevealed.Value:find(otherPlayer.Name) then
+								myRevealed.Value = myRevealed.Value .. otherPlayer.Name .. ","
+								
+								-- Optional: Fire a notification or chat message here to let them know it worked!
+							end
+						end
+					end
+				end
+			end
+			return
+		end
+		-- [[ END REVEAL ]]
 			if string.lower(msgtable[2])=="sit" and not IsEmoting then
 				IsEmoting = true
 				spawn(function()
@@ -5454,19 +5496,9 @@ table.insert(Connections,
 table.insert(Connections,
 	PlayerData.LastName.Changed:Connect(function()
 		wait()
-		Humanoid.DisplayName = tostring(PlayerData.FirstName.Value)
 
-		if PlayerData.LastName.Value~="" then
-			if PlayerData.HouseRank.Value ~= "Owner" then
-				Humanoid.DisplayName = tostring(PlayerData.FirstName.Value).."  \n{"..tostring(PlayerData.LastName.Value).."}"
-			else
-				if PlayerData.Gender.Value == 'Female' then
-					Humanoid.DisplayName = tostring(PlayerData.FirstName.Value).." \n{"..tostring(PlayerData.LastName.Value).." - Lady}"
-				else
-					Humanoid.DisplayName = tostring(PlayerData.FirstName.Value).." \n{"..tostring(PlayerData.LastName.Value).." - Lord}"
-				end
-			end
-		end
+		-- Hide the name on the server so strangers see ???
+		Humanoid.DisplayName = "???"
 
 		Player.leaderstats.LastName.Value = PlayerData.LastName.Value
 		Player.leaderstats.HouseRank.Value = PlayerData.HouseRank.Value
@@ -5478,26 +5510,19 @@ table.insert(Connections,
 			PlayerData.HouseRank.Value,
 			PlayerData.Gender.Value
 		)
-	end))
+	end)
+)
+
 table.insert(Connections,
 	PlayerData.FirstName.Changed:Connect(function()
 		wait()
-		Humanoid.DisplayName = tostring(PlayerData.FirstName.Value)
 
-		if PlayerData.LastName.Value~="" then
-			if PlayerData.HouseRank.Value ~= "Owner" then
-				Humanoid.DisplayName = tostring(PlayerData.FirstName.Value).."  \n{"..tostring(PlayerData.LastName.Value).."}"
-			else
-				if PlayerData.Gender.Value == 'Female' then
-					Humanoid.DisplayName = tostring(PlayerData.FirstName.Value).." \n{"..tostring(PlayerData.LastName.Value).." - Lady}"
-				else
-					Humanoid.DisplayName = tostring(PlayerData.FirstName.Value).." \n{"..tostring(PlayerData.LastName.Value).." - Lord}"
-				end
-			end
-		end
+		-- Hide the name on the server so strangers see ???
+		Humanoid.DisplayName = "???"
 
 		Player.leaderstats.LastName.Value = PlayerData.LastName.Value
 		Player.leaderstats.HouseRank.Value = PlayerData.HouseRank.Value
+
 		game.ReplicatedStorage.Requests.NameChanged:FireClient(Player,
 			PlayerData.FirstName.Value,
 			PlayerData.UberTitle.Value,
