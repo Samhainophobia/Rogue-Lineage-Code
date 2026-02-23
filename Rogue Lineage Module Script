@@ -27,79 +27,86 @@ local dungeonWL = {		-- temporary whitelist
 }
 
 local GemRoll = {
-	["Ruby"] = 200,
-	["Emerald"] = 205,
-	["Opal"] = 225,
-	["Azure"] = 25,
-	["Sapphire"] = 225,
-	["Solar"] = 35,
-	["Blazing"] = 5,
-	["Lunar"] = 35,
-	--["FrostFlame"] = 15,
-	["Diamond"] = 175,
-	["Curse of the Bloodthirsty"] = 10,
-	["Detonation"] = 12.5,
-	["Elastic"] = 15,
-	["Heroism"] = 25,
-	["Vampirism"] = 10,
-	["Storm"] = 25,
-	["Gluttony"] = 15,
-	["Wild"] = 35,
-	["Deferred"] = 15,
-	["Chilling"] = 35,
-	["NoLifeKing"] = 20,
-	["Obfuscation"] = 17.5,
-	["Nemesis"] = 10,
-	["Edenkite"] = 15,
-	["StormBreaker"] = 15, -- // Really bad | Needs a few touches
-	["Grim"] = 11,
-	["Dark"] = 5,
-	["Glory"] = 10,
+	-- [[ NORMAL GEMS (VERY COMMON) ]]
+	["Ruby"] = 5000,
+	["Emerald"] = 5000,
+	["Opal"] = 5000,
+	["Sapphire"] = 5000,
+	["Diamond"] = 4000,
 
+	-- [[ RARE GEMS ]]
+	["Azure"] = 50, -- Still a gem, but noticeably rarer than the main 5
+
+	-- [[ ENCHANTS & VARIANTS (REALLY RARE) ]]
+	["Solar"] = 5,
+	["Blazing"] = 1,
+	["Lunar"] = 5,
+	--["FrostFlame"] = 1,
+	["Curse of the Bloodthirsty"] = 1,
+	["Detonation"] = 2,
+	["Elastic"] = 2,
+	["Heroism"] = 3,
+	["Vampirism"] = 1,
+	["Storm"] = 3,
+	["Gluttony"] = 2,
+	["Wild"] = 5,
+	["Deferred"] = 2,
+	["Chilling"] = 5,
+	["NoLifeKing"] = 2,
+	["Obfuscation"] = 2,
+	["Nemesis"] = 1,
+	["Edenkite"] = 2,
+	["StormBreaker"] = 2, -- // Really bad | Needs a few touches
+	["Grim"] = 1,
+	["Dark"] = 1,
+	["Glory"] = 1,
 }
 
 
 local rolling = {
-	["Scroll of Ignis"] = 250,
-	["Scroll of Armis"] = 250,
-	["Scroll of Celeritas"] = 250,
-	["Scroll of Sagitta Sol"] = 250,
-	["Scroll of Tenebris"] = 250,
-	["Scroll of Viribus"] = 250,
-	["Scroll of Trahere"] = 250,
-	["Scroll of Telorum"] = 250,
-	["Scroll of Nocere"] = 250,
-	["Ice Essence"] = 125,
+	-- [[ COMMON SCROLLS ]]
+	["Scroll of Ignis"] = 5000,
+	["Scroll of Armis"] = 5000,
+	["Scroll of Sagitta Sol"] = 5000,
+	["Scroll of Tenebris"] = 5000,
+	["Scroll of Viribus"] = 5000,
 
-	--subtract these by 500 to get normal value
-	["Scroll of Manus Dei"] = 100,
-	["Scroll of Fimbulvetr"] = 100,
-	["Scroll of Terra Mea"] = 5,
-	["Scroll of Hoppa"] = 20,
-	["Scroll of Snarvindur"] = 20,
-	["Scroll of Sraunus"] = 10,
-	["Scroll of Percutiens"] = 20,
+	-- [[ REALLY RARE SCROLLS ]]
+	["Scroll of Celeritas"] = 5000,
+	["Scroll of Trahere"] = 2500,
+	["Scroll of Telorum"] = 2500,
+	["Scroll of Nocere"] = 5000,
+	["Ice Essence"] = 2000,
+	["Scroll of Manus Dei"] = 2,
+	["Scroll of Fimbulvetr"] = 2,
+	["Scroll of Terra Mea"] = 1,
+	["Scroll of Hoppa"] = 1,
+	["Scroll of Snarvindur"] = 1,
+	["Scroll of Sraunus"] = 1,
+	["Scroll of Percutiens"] = 1,
 }
-local magerolling = {
-	["Scroll of Ignis"] = 200,
-	["Scroll of Armis"] = 200,
-	["Scroll of Celeritas"] = 200,
-	["Scroll of Sagitta Sol"] = 200,
-	["Scroll of Tenebris"] = 200,
-	["Scroll of Viribus"] = 200,
-	["Scroll of Trahere"] = 200,
-	["Scroll of Telorum"] = 200,
-	["Scroll of Nocere"] = 200,
-	["Ice Essence"] = 200,
 
-	--subtract these by 500 to get normal value
-	["Scroll of Manus Dei"] = 200,
-	["Scroll of Fimbulvetr"] = 200,
-	["Scroll of Terra Mea"] = 80,
-	["Scroll of Hoppa"] = 110,
-	["Scroll of Snarvindur"] = 150,
-	["Scroll of Sraunus"] = 100,
-	["Scroll of Percutiens"] = 110,
+local magerolling = {
+	-- [[ COMMON SCROLLS ]]
+	["Scroll of Ignis"] = 5000,
+	["Scroll of Armis"] = 5000,
+	["Scroll of Sagitta Sol"] = 5000,
+	["Scroll of Tenebris"] = 5000,
+	["Scroll of Viribus"] = 5000,
+
+	-- [[ REALLY RARE SCROLLS (Slightly better odds if they are already a Mage) ]]
+	["Scroll of Celeritas"] = 5000,
+	["Scroll of Trahere"] = 3000,
+	["Scroll of Telorum"] = 3000,
+	["Scroll of Nocere"] = 5000,
+	["Ice Essence"] = 2500,
+	["Scroll of Manus Dei"] = 5,
+	["Scroll of Fimbulvetr"] = 5,
+	["Scroll of Terra Mea"] = 2,
+	["Scroll of Hoppa"] = 2,
+	["Scroll of Snarvindur"] = 2,
+	["Scroll of Sraunus"] = 2,
+	["Scroll of Percutiens"] = 2,
 }
 local function create(name,deletetime,parent)
 	if not parent then
@@ -120,6 +127,7 @@ local classdata = {
 			"Pommel Strike",
 		},
 		price = 35,
+		xp = 70,
 	},
 	LordsTraining = {
 		skills = {
@@ -128,6 +136,7 @@ local classdata = {
 			"Disarming Strike",
 		},
 		price = 100,
+		xp = 100,
 		requiredclass = "",
 	},
 	Bard = {
@@ -189,6 +198,7 @@ local classdata = {
 			"Hunter's Focus",
 		},
 		price = 100,
+		xp = 200,
 		requiredclass = "",
 		class = "Spearfisher",
 	};
@@ -201,6 +211,7 @@ local classdata = {
 			"Fatal Freeze"
 		},
 		price = 350,
+		xp = 1000,
 		requiredclass = "Spearfisher",
 		class = "TridentFisher",
 		isultra = true,
@@ -222,6 +233,9 @@ local classdata = {
 			"Shoulder Bash",
 		},
 		price = 100,
+		xp = 300,
+		alignType = "Chaotic",
+		alignment = 20,
 		class = "Greatsword",
 		requiredclass = "",
 	};
@@ -231,6 +245,8 @@ local classdata = {
 			"Abysswalker",
 		},
 		price = 350,
+		alignType = "Chaotic",
+		alignment = 50,
 		requiredclass = "Greatsword",
 		class = "Abysswalker",
 		isultra = true,
@@ -246,6 +262,9 @@ local classdata = {
 		},
 		price = 500,
 		requiredclass = "Greatsword",
+		alignType = "Chaotic",
+		xp = 750,
+		alignment = 45,
 		class = "BeastSlayer",
 		isultra = true,
 	};
@@ -256,6 +275,9 @@ local classdata = {
 			"Thrust",
 		},
 		price = 350,
+		alignType = "Chaotic",
+		xp = 3000,
+		alignment = 60,
 		requiredclass = "Abysswalker",
 		class = "Abysswalker",
 		isultra = true,
@@ -268,6 +290,9 @@ local classdata = {
 			"BuyKatana",
 		},
 		price = 125,
+		xp = 250,
+		alignType = "Orderly",
+		alignment = 25,
 		requiredclass = "",
 		class = "Samurai",
 	},
@@ -315,6 +340,9 @@ local classdata = {
 			"Samurai",
 		},
 		price = 250,
+		xp = 500,
+		alignType = "Orderly",
+		alignment = 25,
 		requiredclass = "Samurai",
 		class = "Ronin",
 		isultra = true,
@@ -326,6 +354,7 @@ local classdata = {
 			"Serpent Strike",
 		},
 		price = 35,
+		xp = 50,
 	},
 	DragonKnight = {
 		skills = {
@@ -334,6 +363,9 @@ local classdata = {
 			"Dragon Blood",
 		},
 		price = 100,
+		xp = 125,
+		alignType = "Orderly",
+		alignment = 10,
 		requiredclass = "",
 		class = "Dragon Knight",
 		ultra = "Dragon Slayer",
@@ -346,6 +378,9 @@ local classdata = {
 			"DragonBloodUpgrade"
 		},
 		price = 350,
+		xp = 500,
+		alignType = "Orderly",
+		alignment = 42,
 		requiredclass = "Dragon Knight",
 		class = "Dragon Slayer",
 		isultra = true,
@@ -356,6 +391,8 @@ local classdata = {
 			"MentalBlock",
 		},
 		price = 150,
+		alignType = "Orderly",
+		alignment = 40,
 		requiredclass = "",
 		class = "Illusionist",
 		ultra = "Master Illusionist",
@@ -369,6 +406,8 @@ local classdata = {
 			"IllusionMastery"
 		},
 		price = 350,
+		alignType = "Orderly",
+		alignment = 60,
 		requiredclass = "Illusionist",
 		class = "Master Illusionist",
 		isultra = true,
@@ -381,6 +420,9 @@ local classdata = {
 			"Impale",
 		},
 		price = 150,
+		xp = 300,
+		alignType = "Chaotic",
+		alignment = 30,
 		requiredclass = "",
 		class = "ChurchKnight",
 		ultra = "DeepKnight",
@@ -393,6 +435,9 @@ local classdata = {
 			"PrinceBlessing"
 		},
 		price = 350,
+		xp = 650,
+		alignType = "Chaotic",
+		alignment = 45,
 		requiredclass = "ChurchKnight",
 		class = "DeepKnight",
 		isultra = true,
@@ -404,6 +449,9 @@ local classdata = {
 			"Flame Charge",
 		},
 		price = 65,
+		xp = 325,
+		alignType = "Orderly",
+		alignment = 25,
 		requiredclass = "",
 		class = "SigilKnight",
 		ultra = "SigilKnightCommander",
@@ -481,6 +529,9 @@ local classdata = {
 			"Dark Sigil Helmet",
 		},
 		price = 350,
+		xp = 700,
+		alignType = "Chaotic",
+		alignment = 50,
 		requiredclass = "SigilKnight",
 		class = "DarkSigilKnight",
 		isultra = true,
@@ -494,6 +545,9 @@ local classdata = {
 			"ChargeMastery",
 		},
 		price = 350,
+		xp = 775,
+		alignType = "Orderly",
+		alignment = 60,
 		requiredclass = "SigilKnight",
 		class = "SigilKnightCommander",
 		isultra = true,
@@ -507,6 +561,9 @@ local classdata = {
 			"Monastic Stance",
 		},
 		price = 40,
+		xp = 250,
+		alignType = "Orderly",
+		alignment = 10,
 		requiredclass = "",
 		class = "Monk",
 	},
@@ -531,6 +588,9 @@ local classdata = {
 			"ElectricPunch",
 		},
 		price = 350,
+		xp = 650,
+		alignType = "Orderly",
+		alignment = 35,
 		requiredclass = "Monk",
 		class = "DragonSage",
 		isultra = true,
@@ -557,6 +617,9 @@ local classdata = {
 			"TrainedCombat",
 		},
 		price = 60,
+		xp = 275,
+		alignType = "Chaotic",
+		alignment = 15,
 		requiredclass = "",
 		class = "Akuma",
 		ultra = "Oni",
@@ -569,6 +632,9 @@ local classdata = {
 			"Misogi",
 			--"Misogi2",
 		},
+		xp = 650,
+		alignType = "Chaotic",
+		alignment = 35,
 		price = 350,
 		requiredclass = "Akuma",
 		class = "Oni",
@@ -584,6 +650,9 @@ local classdata = {
 		--	"Final Spear Crash",
 		},
 		price = 1350,
+		xp = 700,
+		alignType = "Orderly",
+		alignment = 60,
 		requiredclass = "Dragon Knight",
 		class = "Lancer",
 		isultra = true,
@@ -600,6 +669,7 @@ local classdata = {
 			--"Mind's Eye",
 		},
 		price = 200,
+		xp = 500,
 		requiredclass = "Akuma",
 		class = "StreetFighter",
 		isultra = true,
@@ -639,6 +709,7 @@ local classdata = {
 	Thief = {
 		skills = {"Agility","Dagger Throw","Stealth","Lock Manipulation", "Pickpocket"}, -- WOW
 		price = 45,
+		xp = 50,
 	},
 	Spy = {
 		skills = {
@@ -648,6 +719,9 @@ local classdata = {
 			--"Interrogation",
 		},
 		price = 60,
+		xp = 200,
+		alignType = "Orderly",
+		alignment = 15,
 		requiredclass = "",
 		class = "Spy",
 		ultra = "Whisper",
@@ -662,6 +736,9 @@ local classdata = {
 			--"Interrogation",
 		},
 		price = 350,
+		xp = 500,
+		alignType = "Orderly",
+		alignment = 40,
 		requiredclass = "Spy",
 		class = "Whisper",
 		isultra = true,
@@ -669,6 +746,9 @@ local classdata = {
 	Assassin = {
 		skills = {"Bane","UpgradedAgility","Dagger Throw","Lethality","Triple Dagger Throw"},
 		price = 45,
+		xp = 425,
+		alignType = "Chaotic",
+		alignment = 25,
 		class = "Assassin",
 		requiredclass = "",
 		ultra = "Faceless",
@@ -682,6 +762,9 @@ local classdata = {
 			"ShadowDash"
 		},
 		price = 350,
+		xp = 700,
+		alignType = "Chaotic",
+		alignment = 40,
 		requiredclass = "Assassin",
 		class = "Faceless",
 		isultra = true,
@@ -696,6 +779,9 @@ local classdata = {
 			"Resurrection",
 		},
 		price = 350,
+		xp = 700,
+		alignType = "Chaotic",
+		alignment = 40,
 		requiredclass = "Assassin",
 		class = "Shinobi",
 		isultra = true,
@@ -719,6 +805,9 @@ local classdata = {
 		requiredclass = "",
 		class = "Necromancer",
 		price = 130,
+	--	xp = 1000,
+		alignType = "Chaotic",
+		alignment = 25,
 	},
 	["Master Necromancer"] = {
 		skills = {
@@ -731,6 +820,9 @@ local classdata = {
 		requiredclass = "Necromancer",
 		class = "Master Necromancer",
 		price = 350,
+	--	xp = 1000,
+		alignType = "Chaotic",
+		alignment = 50,
 		isultra = true,
 	},
 	Lapidarist = {
@@ -794,10 +886,11 @@ local ultraclass3 = {
 	"Lancer",
 	"Oblitus Domin" -- Forgotten Lord
 }
-local function teachskill(p,info,firstcheck)
+local function teachskill(p, info, firstcheck)
 	local data = game.ServerStorage.PlayerData[p.Name]
 	local hybridcheck = false
 	local prioritize = 1
+
 	if info.isultra then
 		prioritize = 3
 	end
@@ -813,6 +906,25 @@ local function teachskill(p,info,firstcheck)
 		selfproir = 2
 	end
 
+	-- [[ NEW: XP and Alignment Checks ]]
+	-- Default XP: Base = 150, Super = 1000, Ultra = 3000 (Overridable in classdata)
+	local reqXP = info.xp or (prioritize == 3 and 3000 or prioritize == 2 and 1000 or 150)
+	if data:FindFirstChild("XP") and data.XP.Value < reqXP then
+		return "no"
+	end
+
+	-- Default Alignment: Super = 25, Ultra = 50 (Overridable in classdata)
+	if info.alignType then
+		local reqAlign = info.alignment or (prioritize == 3 and 50 or prioritize == 2 and 25 or 0)
+		if data:FindFirstChild("Alignment") then
+			if info.alignType == "Orderly" and data.Alignment.Value < reqAlign then
+				return "no"
+			elseif info.alignType == "Chaotic" and data.Alignment.Value > -reqAlign then
+				return "no"
+			end
+		end
+	end
+	-- [[ END NEW ]]
 
 	if prioritize == 3 then
 		if ((info.requiredclass ~= "" and data.Class.Value ~= info.requiredclass) or data.Hybrid.Value ~= "") and data.Class.Value ~= info.class then
@@ -849,7 +961,7 @@ local function teachskill(p,info,firstcheck)
 	end
 	if ownedskills < #info.skills then
 		if firstcheck then
-			return"notmax"
+			return "notmax"
 		end
 		if commands.ChangeSilver(p,data,-info.price)then
 			if table.find(skills,chosenskill)then
@@ -874,19 +986,19 @@ local function teachskill(p,info,firstcheck)
 			data.Skills.Value = table.concat(skills,",")
 			commands.Learn(p)
 			if info.ultra and not info.isultra then
-				game:GetService("BadgeService"):AwardBadge(p.UserId, 2126741603)
+				game:GetService("BadgeService"):AwardBadge(p.UserId, 02126741603)
 			end
 			if info.isultra then
-				game:GetService("BadgeService"):AwardBadge(p.UserId, 2126741607)
+				game:GetService("BadgeService"):AwardBadge(p.UserId, 02126741607)
 			end
-			return"gotskill"
+			return "gotskill"
 		else
-			return"poor"
+			return "poor"
 		end
 	elseif ownedskills == #info.skills then
-		return"max"
+		return "max"
 	end
-	return"poor"
+	return "poor"
 end
 local dialogues = {
 	Snowman = {
@@ -6537,14 +6649,36 @@ function dialogues.Engineer.v1(p,v)
 	if not data or not p.Character then
 		return
 	end
-	if data.Race.Value ~= "Gaian" and data.Race.Value ~= "Metascroom" then
+
+	-- [[ NEW: REJECT METASCROOMS ]]
+	if data.Race.Value == "Metascroom" then
+		return {
+			speaker = "Engineer";
+			msg = "You're a Scroom... I don't work on your kind.";
+			endchoice = "Bye.";
+		}
+	end
+
+	if data.Race.Value ~= "Gaian" then
 		if data.MetalArm.Value == false then
 			if v.page == 1 then
 				return dialogues.Engineer.human.p1
 			elseif v.page == 2 then
+
+				-- [[ NEW: REQUIRE THE PLAYER TO BE ARMLESS ]]
+				local Injuries = string.split(data.Injuries.Value, ",")
+				if not table.find(Injuries, "armless") then
+					return {
+						speaker = "Engineer";
+						msg = "What do you want a prosthetic for? You still have both your arms!";
+						endchoice = "Oh, right.";
+					}
+				end
+
 				return dialogues.Engineer.human.p2
 			elseif v.page == 3 then
 				if commands.ChangeSilver(p,data,-500)then
+					data.MetalArm.Value = true -- Fixed missing save value!
 					commands["Metal Arm"](p)
 					return dialogues.Engineer.human.p4
 				else
@@ -6559,13 +6693,11 @@ function dialogues.Engineer.v1(p,v)
 					data.MetalArm.Value = false
 					local arm = p.Character:FindFirstChild("Arm")
 					local plate = p.Character:FindFirstChild("ArmPlate")
-					if arm then
-						arm:Destroy()
-					end
-					if plate then
-						plate:Destroy()
-					end
-					p.Character["Left Arm"].Transparency = 0
+					if arm then arm:Destroy() end
+					if plate then plate:Destroy() end
+
+					-- Keep their arm invisible since they are still injured!
+					p.Character["Left Arm"].Transparency = 1 
 					return dialogues.Engineer.human.p4
 				else
 					return dialogues.Engineer.poor
