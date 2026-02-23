@@ -7,6 +7,7 @@ local randomize_ = require(game.ServerScriptService.Modules.Randomize)
 local random_name1,random_name2,random_name3
 local random_race1,random_race2,random_race3
 
+
 local function getAppearance(Player)
 	local Char
 	local pc,err = pcall(function()
@@ -4904,7 +4905,7 @@ local dialogues = {
 			endchoice = "Bye.";
 		};
 	};
-
+	-- This is the table at the top of the script
 	["Old Man"] = {
 		p1 = {
 			speaker = "Old Man";
@@ -4929,6 +4930,38 @@ local dialogues = {
 			endchoice = "Bye.";
 		};
 	};
+} -- <== THIS BRACKET CLOSES THE ENTIRE DIALOGUES TABLE
+
+-- ALL FUNCTIONS GO DOWN HERE!
+dialogues["Old Man"].v1 = function(p, v)
+	local data = game.ServerStorage.PlayerData:FindFirstChild(p.Name)
+	if not data then return end
+
+	if v.page == 1 then
+		-- Page 1: He asks for grog
+		return dialogues["Old Man"].p1
+
+	elseif v.page == 2 then
+		-- Page 2: He offers the trade (The player clicked "Need any help?")
+		return dialogues["Old Man"].needhelp
+
+	elseif v.page == 3 then
+		-- Page 3: The player clicked "Sure." We check their silver!
+		if commands.ChangeSilver(p, data, -10) then
+
+			-- Take the silver, change their primary weapon to the Tome
+			data.PrimaryWeapon.Value = "Tome" 
+
+			-- This command refreshes their backpack so they physically receive the Tome tool!
+			commands.Learn(p) 
+
+			return dialogues["Old Man"].sure
+		else
+			-- If they don't have 10 silver, he rejects them
+			return dialogues["Old Man"].poor
+		end
+	end
+end
 
 	Cedric = {
 		p1 = {
@@ -11811,7 +11844,10 @@ end
 -- [[ AUTOMATIC "NO XP" DIALOGUE WRAPPER ]]
 -- This automatically intercepts every trainer in the game and injects the "no xp" dialogue if they fail the check!
 for npcName, npcData in pairs(dialogues) do
-	if type(npcData.v1) == "function" then
+
+	-- FIXED: We MUST check if npcData is a table first, because the list also contains functions like "shop" and "classSkills"!
+	if type(npcData) == "table" and type(npcData.v1) == "function" then
+
 		local original_v1 = npcData.v1
 		npcData.v1 = function(p, v)
 			LastTeachReason = "" -- Reset the reason
@@ -11823,7 +11859,7 @@ for npcName, npcData in pairs(dialogues) do
 			if LastTeachReason == "noxp" and v.page == 1 then
 				return {
 					speaker = npcName,
-					msg = "Your arms are like noodles. Come back when you have some actual combat experience.",
+					msg = "You lack the ability to understand such teaching.",
 					endchoice = "I'll go train."
 				}
 			end
