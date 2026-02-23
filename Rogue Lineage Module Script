@@ -4905,7 +4905,6 @@ local dialogues = {
 			endchoice = "Bye.";
 		};
 	};
-	-- This is the table at the top of the script
 	["Old Man"] = {
 		p1 = {
 			speaker = "Old Man";
@@ -4930,39 +4929,6 @@ local dialogues = {
 			endchoice = "Bye.";
 		};
 	};
-} -- <== THIS BRACKET CLOSES THE ENTIRE DIALOGUES TABLE
-
--- ALL FUNCTIONS GO DOWN HERE!
-dialogues["Old Man"].v1 = function(p, v)
-	local data = game.ServerStorage.PlayerData:FindFirstChild(p.Name)
-	if not data then return end
-
-	if v.page == 1 then
-		-- Page 1: He asks for grog
-		return dialogues["Old Man"].p1
-
-	elseif v.page == 2 then
-		-- Page 2: He offers the trade (The player clicked "Need any help?")
-		return dialogues["Old Man"].needhelp
-
-	elseif v.page == 3 then
-		-- Page 3: The player clicked "Sure." We check their silver!
-		if commands.ChangeSilver(p, data, -10) then
-
-			-- Take the silver, change their primary weapon to the Tome
-			data.PrimaryWeapon.Value = "Tome" 
-
-			-- This command refreshes their backpack so they physically receive the Tome tool!
-			commands.Learn(p) 
-
-			return dialogues["Old Man"].sure
-		else
-			-- If they don't have 10 silver, he rejects them
-			return dialogues["Old Man"].poor
-		end
-	end
-end
-
 	Cedric = {
 		p1 = {
 			speaker = "Cedric";
@@ -5254,6 +5220,24 @@ end
 	};
 };
 
+dialogues["Old Man"].v1 = function(p, v)
+	local data = game.ServerStorage.PlayerData:FindFirstChild(p.Name)
+	if not data then return end
+
+	if v.page == 1 then
+		return dialogues["Old Man"].p1
+	elseif v.page == 2 then
+		return dialogues["Old Man"].needhelp
+	elseif v.page == 3 then
+		if commands.ChangeSilver(p, data, -10) then
+			data.PrimaryWeapon.Value = "Tome" 
+			commands.Learn(p) 
+			return dialogues["Old Man"].sure
+		else
+			return dialogues["Old Man"].poor
+		end
+	end
+end
 local gateopening = false
 local gateClosed = CFrame.new(4010.356, 485.778, -1101.255)
 local gateOpen = CFrame.new(4010.356, 380.778, -1101.255)
