@@ -1,0 +1,3046 @@
+local PlayerDatas = game.ServerStorage.PlayerData
+local temphandler = require(game.ServerScriptService.Modules.TemperatureHandler)
+local create = function(name,deletetime,parent)
+	local i = Instance.new("Accessory")
+	i.Name = name
+	i.Parent = parent
+	if deletetime then
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(i,deletetime)
+	end
+	return i
+end
+local commands = {}
+
+local BlacklistedObjects = {
+	"ParticleEmitter",
+	"Fire",
+	"WrapLayer",
+	"SurfaceAppearance"
+}
+
+local function CheckRace(PlayerData, Race)
+	local IsRace = false
+	if PlayerData.Race.Value == Race then
+		IsRace = true
+	elseif PlayerData.Race.Value == 'Navaran' then
+		if PlayerData.CopiedRaces.Value:find(Race) then
+			IsRace = true
+		end
+	end
+
+	return IsRace
+end
+
+
+local function CheckRace2(Value: StringValue, Race: string)
+	local IsRace = false
+	local PlayerData = Value:FindFirstAncestorOfClass('Folder')
+
+	if Value.Value == Race then
+		IsRace = true
+	elseif Value.Value == 'Navaran' then
+		if PlayerData.CopiedRaces.Value:find(Race) then
+			IsRace = true
+		end
+	end
+
+	return IsRace
+end
+
+
+local function getAppearance(Player)
+	local Char
+	local pc,err = pcall(function()
+		Char = game.Players:GetCharacterAppearanceAsync(Player.CharacterAppearanceId)
+	end)
+	if not Char then
+		print("getAppearance Failed, retrying in 0.5",err)
+		task.wait(0.5)
+		return getAppearance(Player)
+	else
+		return Char
+	end
+end
+
+local function DoAccessories(Player,Data)
+	local Character = getAppearance(Player)
+	Character.Parent = game.ServerStorage
+	pcall(function() --this is not a backdoor
+		local additional = Data:FindFirstChild("AdditionalAccessories")
+		if additional and additional.Value ~= "[]" then
+			local js = game.HttpService:JSONDecode(additional.Value)
+			if table.find(js,"Overwrite") then
+				for _,v in ipairs(Character:GetChildren())do
+					if v:IsA("Accessory")then
+						print(v)
+						v:Destroy()
+					end
+				end
+			end
+			for _,v in js do
+				local accessory = game:GetService("InsertService"):LoadAsset(v)
+				if not accessory then continue end
+				for _,v in accessory:GetChildren() do
+					if not v or (v and not v:IsA("Accessory")) then continue end
+					Instance.new("Folder",v).Name = "Bypass"
+					v.Parent = Character
+				end
+
+				accessory:Destroy()
+			end
+		end
+	end)
+	local Hairs,Accessories = {},{}
+	for _,v in ipairs(Character:GetChildren())do
+		if v:IsA("Accessory") then
+			local Attachment = v:FindFirstChildWhichIsA("Attachment",true)
+			if table.find(BlacklistedObjects,v.ClassName) then
+				v:Destroy()
+			end
+
+			if v.Name:find("Snorkel") then
+				table.insert(Accessories,v:Clone()) continue
+			end
+
+			if v.Name:find("FatherTime") then
+				table.insert(Hairs,v:Clone()) continue
+			end
+
+			if v.Name == "EarsAccessory" then
+				table.insert(Hairs,v:Clone()) continue
+			end
+
+			if Attachment then
+				if Attachment.Name == "HairAttachment" then
+					table.insert(Hairs,v:Clone()) continue
+				elseif Attachment.Name == "FaceFrontAttachment"then
+					table.insert(Accessories,v:Clone()) continue
+				elseif Attachment.Name == "FaceCenterAttachment"then
+					table.insert(Accessories,v:Clone()) continue
+				elseif Data.LastName.Value == 'Cycloptic' or Player.Name == 'Cycloptic_Cam' or Player.Name == 'Nebuloussu' then
+					table.insert(Accessories,v:Clone()) continue
+				end
+
+			end
+
+			if v:FindFirstChild("Bypass") then
+				table.insert(Accessories,v:Clone())
+			end
+		end
+	end
+	if not _G.Debris then repeat task.wait() until _G.Debris end
+	_G.Debris:AddItem(Character,1)
+	return Hairs,Accessories
+end
+
+
+commands["Learn"] = function(p)
+	local c
+	if p:IsA("Model") then 
+		c = p
+		p = game.Players:GetPlayerFromCharacter(c)
+	else	
+		c = p.Character or p.CharacterAdded:Wait()
+	end
+	c.HumanoidRootPart:WaitForChild("Learn"):Play()
+	local l1 = game.ServerStorage.Assets.Learn.Attachment:Clone()
+	l1.ParticleEmitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0,p.Backpack:WaitForChild("ManaColor").Value),
+		ColorSequenceKeypoint.new(1,p.Backpack:WaitForChild("ManaColor").Value),
+	})
+	l1.Parent = c:WaitForChild("Head")
+	l1.ParticleEmitter:Emit(15)
+	if not _G.Debris then repeat task.wait() until _G.Debris end
+	_G.Debris:AddItem(l1,1.5)
+end
+
+local function weldBetween(a, b, offset)
+	local weld = Instance.new("ManualWeld", a)
+	weld.C0 = offset
+	weld.Part0 = a
+	weld.Part1 = b
+	return weld
+end
+
+
+commands["UpdateAppearance"] = function(Player, playlearnsound)
+	local Character = Player.Character
+	local Data = game.ServerStorage.PlayerData:FindFirstChild(Player.Name)
+	local GetChildren,GetDescendants = game.GetChildren,game.GetDescendants
+	local FindFirstChild,WaitForChild = game.FindFirstChild,game.WaitForChild
+	local Assets = game.ServerStorage.Assets
+	local ReplicatedAssets = game.ReplicatedStorage.Assets
+
+	if not Data then return end
+
+	local Race = Data.Race.Value
+	local RaceInfo = game.ReplicatedStorage.Info.Races:FindFirstChild(Data.Race.Value)
+	local RaceVariant = Data.RaceVariant.Value
+	local FoundRaceVariant = RaceInfo:FindFirstChild(RaceVariant)
+	if FoundRaceVariant then
+		if RaceInfo[RaceVariant]:FindFirstChild("Shiny") then
+			if Data.HasExotic.Value == true then
+				RaceInfo = RaceInfo[RaceVariant]
+			else
+				Data.RaceVariant.Value = ""
+			end
+		else
+			RaceInfo = RaceInfo[RaceVariant] 
+		end
+	end
+	local HairColor = RaceInfo.HairColor
+	if playlearnsound then
+		commands["Learn"](Player)
+	end
+
+	if Character:FindFirstChild("Bald") then
+		Character:FindFirstChild("Bald"):Destroy()
+	end
+
+	local b = ReplicatedAssets.Faces:WaitForChild(Data:WaitForChild("Face").Value)
+
+	if Race.Value == "Rigan" or Race.Value == "Fischeran" or Race.Value == "Goblin" then
+		b = FindFirstChild(ReplicatedAssets.Faces.Rigan,Data.Face.Value)or FindFirstChild(ReplicatedAssets.Faces,Data.Face.Value)
+	end
+
+	if Race.Value == 'GreaterFischeran' or Race.Value == "Verity" then
+		b = ReplicatedAssets.Faces.Fallen
+	end
+	
+	if Race.Value == "Capra" then
+		b = ReplicatedAssets.Faces.Friendly
+	end
+
+	if Race.Value == "Deva1" then
+		local newValue = Instance.new("Color3Value")
+		newValue.Value = Color3.fromRGB(Data.ManaColor.Value.r,Data.ManaColor.Value.g,Data.ManaColor.Value.b)
+		HairColor = newValue
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(newValue, 5)
+	end
+	local c = b:Clone()
+	local RaceData = Data:WaitForChild("Race")
+	if RaceData.Value ~= "Demon" then
+		c.Color3 = RaceInfo.EyeColor.Value
+	end	
+	if Race.Value == "Deva1" then
+		c.Color3 = Player.Backpack.ManaColor.Value
+	end
+	c.Parent = Character.Head
+
+	for _,v in pairs(Character:GetChildren()) do
+		if v:IsA("Accessory") and v:FindFirstChild("Handle") then
+			v:Destroy()
+		end
+	end
+
+	local NoHead = {"Dullahan", "Lich", "Scroom", "Metascroom", "Metascroom", 'Frutas'}
+
+	task.spawn(function()
+		if Data.Skills.Value:find("nArmor") then
+			local a = script.norpArmor:Clone()
+			for _,v in a:GetChildren() do
+				for _,w in v:GetChildren() do
+					if w:IsA("ManualWeld") then
+						w.Part0 = Character[v.Name]
+						w.Enabled = true
+					end
+				end
+				v.Name = "nAPiece"
+				v.Parent = Character
+			end
+			a:Destroy()
+		end
+	end)
+
+	task.spawn(function()
+
+		local Hairs,Accessories = DoAccessories(Player,Data)
+		for _,v in pairs(Accessories)do
+			v.Parent = Character
+		end
+		for _,v in pairs(Hairs)do
+			if not Character:FindFirstChild("Bald") and not RaceInfo:FindFirstChild("Bald") and not FindFirstChild(RaceInfo.Parent,"Bald") and not FindFirstChild(Character,"Bald") and Data.CurrentHats.Value == "" then
+				v.Parent = Character
+				if FindFirstChild(v,"Handle")then
+					local SM = v.Handle:FindFirstChildWhichIsA("SpecialMesh")
+					if SM then
+						if Data.Race.Value == "Deva1" then
+							local Color1 = Color3.fromRGB(Data.ManaColor.Value.r,Data.ManaColor.Value.g,Data.ManaColor.Value.b)
+							SM.TextureId = "rbxassetid://2599831937"
+							SM.VertexColor = Vector3.new(Color1.r,Color1.g,Color1.b)
+						else
+							SM.TextureId = "rbxassetid://2599831937"
+							SM.VertexColor = Vector3.new(HairColor.Value.r,HairColor.Value.g,HairColor.Value.b)
+						end
+					end
+					if Data.Race.Value == "Deva1" then
+						v.Handle.Color = Color3.fromRGB(Data.ManaColor.Value.r,Data.ManaColor.Value.g,Data.ManaColor.Value.b)
+					else
+						v.Handle.Color = HairColor.Value
+					end
+
+
+				end
+			else
+				v:Destroy()
+			end
+		end
+		WaitForChild(Character,"Head")
+		if FindFirstChild(Character.Head,"face")then
+			Character.Head.face:Destroy()
+		end
+
+		local FakeHead
+		if Character:FindFirstChild("FakeHead") then
+			FakeHead = Character.FakeHead
+		else
+			FakeHead = Character.Head:Clone()
+			FakeHead.Name = "FakeHead"
+			FakeHead.Parent = Character
+			FakeHead.Transparency = 0
+			FakeHead.CanCollide = false
+			FakeHead.Anchored = false
+			FakeHead.Massless = true
+			weldBetween(FakeHead,Character.Head,CFrame.new())
+		end
+
+		Character.Head.Mesh.Scale = Vector3.new()
+		if not table.find(NoHead,Race) then
+			c.Parent = FakeHead
+		end
+		local SkinColor = RaceInfo.SkinColor.Value
+		local FaceData = Data.Face.Value
+		local RaceData = Data:WaitForChild("Race")
+		if Data.Vampire.Value == true and Data.RaceVariant.Value ~= "Hoss" then
+			local B1,B2,B3 = SkinColor:ToHSV()
+			SkinColor = Color3.fromHSV(B1,B2/2,B3)			
+			for _,v in pairs(Character:GetDescendants()) do
+				if v:IsA("Decal") and v.Name == FaceData then
+					v.Color3 = Color3.fromRGB(255,0,0)
+				end
+			end		
+		end
+		local function doa()
+			local Description = Character.Humanoid:GetAppliedDescription()
+			Description.Head = 0
+
+			local Description2 = game:GetService('Players'):GetHumanoidDescriptionFromUserId(Player.UserId)
+
+
+			Description.Torso = 0
+			
+			Description.LeftArm = 0
+			Description.RightArm = 0
+			Description.LeftLeg = 0
+			Description.RightLeg = 0
+			Description.HeadColor = SkinColor
+			FakeHead.Color = SkinColor
+			Description.LeftArmColor = SkinColor
+			Description.LeftLegColor = SkinColor
+			Description.RightArmColor = SkinColor
+			Description.RightLegColor = SkinColor
+			Description.TorsoColor = SkinColor
+			Description.Shirt = 0
+			Description.Pants = 0
+			Character.Humanoid:ApplyDescription(Description)
+		end
+		local count = 2
+		for i = 1,12 do
+			local succ, err = pcall(function()
+				return doa()
+			end)
+			if succ then
+				break
+			end
+			wait(1)
+		end
+	end)
+
+	local FakeHead = Character:WaitForChild("FakeHead")
+
+	local Parts = {"DragonHorn","AzaelHorn","HornHive","Bald","ScroomHead","DullahanHead","LichHead","DullahanLight"}
+
+	for _,v in pairs(Character:GetDescendants()) do
+		if Parts[v.Name] then
+			v:Destroy()
+		end
+	end
+
+	if Character:FindFirstChild("Head") then
+		Character.Head.Transparency = 0.99
+	end
+
+	if Data.Skills.Value:find("PrinceBlessing") then
+		local v3 = Instance.new("Accessory")
+		v3.Name = "Bald"
+		v3.Parent = Character
+	end
+
+	if Race == "Kasparan"then
+		for _,v in pairs(GetChildren(Assets.KasparanHorns))do
+			local c = v:Clone()
+			c.Parent = WaitForChild(Character,"Head")
+			c.Weld.Part0 = Character.Head
+			c.Weld.Part1 = c
+		end
+	elseif Race == "Goblin" then
+		local ears = game.ReplicatedStorage.Assets.XarStuff.GoblinEars:Clone()
+		ears.Parent = Character
+		if Data.Vampire.Value == true then
+			local H,S,V = ears.Handle.Color:ToHSV()
+			ears.Handle.Color = Color3.fromHSV(H,S/2,V)
+		end
+	elseif Race == "Capra" then
+		for i,v in pairs(GetChildren(game.ServerStorage.Assets.CapraHorns.New)) do
+			local c = v:Clone()
+			c.Weld.Part0 = Character.Head
+			c.Weld.Part1 = c
+			c.Weld.C0 = CFrame.new(0, 1.39999998, -0.099999994, -1, 0, 0, 0, 1, 0, 0, 0, -1)
+			c.Weld.C1 = CFrame.new(0, 0.600000024, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+			c.Parent = WaitForChild(Character,"Head")			
+		end
+	elseif Race == 'Smurf' then
+		Character['Left Leg'].Size = Vector3.new(.8, 1.5, .8)
+		Character["Right Leg"].Size = Vector3.new(.8, 1.5, .8)
+
+		Character.Torso['Left Hip'].C0 *= CFrame.new(0, 0.5, -.1)
+		Character.Torso['Right Hip'].C0 *= CFrame.new(0, 0.5, -.1)
+
+		Character['Left Arm'].Size = Vector3.new(.8, 1.5, .8)
+		Character['Right Arm'].Size = Vector3.new(.8, 1.5, .8)
+
+		Character.Torso['Left Shoulder'].C0 *= CFrame.new(0, 0, -.3)
+		Character.Torso['Right Shoulder'].C0 *= CFrame.new(0, 0, -.3)
+
+		Character.Torso['Neck'].C0 *= CFrame.new(0, 0, -.25)
+		Character.Torso['NeckAttachment'].Position = Vector3.new(0, .75, 0)
+
+		Character['Head'].Size = Vector3.new(.9, .9, .9)
+
+		Character.Torso.Size = Vector3.new(1.65, 1.5, .8)
+		Character.Humanoid.HipHeight = -.25
+
+	elseif Race == "Elf" then
+		local RightEar = Assets.Elf.ElfEars["Right Ear"]:Clone()
+		RightEar.Parent = WaitForChild(Character, "Head")
+		RightEar.Weld.Part1 = Character.Head
+		RightEar.Weld.C0 = CFrame.new(-0.619999945, -0.100000001, 0.400000066, -1, 0, 0, 0, 0.93741554, 0.348212928, 0, 0.348212928, -0.937415481)
+		local LeftEar = Assets.Elf.ElfEars["Left Ear"]:Clone()
+		LeftEar.Parent = WaitForChild(Character, "Head")
+		LeftEar.Weld.Part1 = Character.Head
+		LeftEar.Weld.C0 = CFrame.new(0.620000064, -0.100000001, 0.399999946, -1, 0, 0, 0, 0.965929627, 0.258804798, 0, 0.258804798, -0.965929747)
+		if Data.RaceVariant.Value == "DarkGreen" then
+			RightEar.Color = Color3.fromRGB(81, 81, 81)
+			LeftEar.Color = Color3.fromRGB(81, 81, 81)
+		end	
+		if Data.RaceVariant.Value == "DarkSilver" then
+			RightEar.Color = Color3.fromRGB(81, 81, 81)
+			LeftEar.Color = Color3.fromRGB(81, 81, 81)
+		end
+	elseif Race == "Hiveborn" then
+		local root = WaitForChild(Character, "HumanoidRootPart")
+		local head = WaitForChild(Character, "Head")
+
+		local Horns = game.ServerStorage.Assets.LayeredClothing.Private[Data.RaceVariant.Value]:Clone()
+		Horns.Parent = head
+		local Hornweld = Instance.new("Weld")
+		Hornweld.Parent = head
+		Hornweld.Part0 = head
+		Hornweld.Part1 = Horns
+	elseif Race == "NecoSpirit" then
+		local root = WaitForChild(Character, "HumanoidRootPart") 
+		local head = WaitForChild (Character, "Head")
+		local NecoEyes = Assets.NecoSpirit.Eyes:Clone()
+		NecoEyes.Parent = head
+		NecoEyes.Weld. Part1 = head
+		for _, sound in Assets.NecoSpirit:GetChildren() do
+			if sound:IsA("Sound") then
+				sound:Clone().Parent = root
+			end
+		end
+	elseif Race == "Poseidon" then -- Moody#9999
+		local Crown = game.ServerStorage.Assets.Moody.MoodyCrown:Clone()
+		Crown.Model["Meshes/PosideonCrown1 (1)"].Weld.Part0 = Character.Head
+		Crown.Model["Meshes/PosideonCrown1 (1)"].Weld.Part1 = Crown.Model["Meshes/PosideonCrown1 (1)"]
+		Crown.Model["Meshes/PosideonCrown1 (1)"].Weld.C0 = CFrame.new(0, 0.65, -0.10, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+
+		Crown.Parent = Character
+	elseif Race == "Deva1" then
+		local DevaBack = Assets["DevaBack"]:Clone()
+		local ColrNew = Color3.fromRGB(Data.ManaColor.Value.r,Data.ManaColor.Value.g,Data.ManaColor.Value.b)
+		DevaBack.Handle.DevaPart.Color = ColrNew
+		local colorKeypoints = {
+			-- API: ColorSequenceKeypoint.new(time, color)
+			ColorSequenceKeypoint.new( 0, ColrNew),  -- At t=0, White
+			ColorSequenceKeypoint.new(.5, ColrNew), -- At t=.5, Orange
+			ColorSequenceKeypoint.new( 1, ColrNew)   -- At t=1, Red
+		}
+
+		DevaBack.Handle.DevaPart.Deva.ParticleEmitter.Color = ColorSequence.new(colorKeypoints)
+		DevaBack.Parent = Character
+	elseif Race == "Visorant" or Race == 'Visorant2' then
+		local ColrNew = Color3.fromRGB(Data.ManaColor.Value.r,Data.ManaColor.Value.g,Data.ManaColor.Value.b)
+		local colorKeypoints = {
+			-- API: ColorSequenceKeypoint.new(time, color)
+			ColorSequenceKeypoint.new( 0, ColrNew),  -- At t=0, White
+			ColorSequenceKeypoint.new(.5, ColrNew), -- At t=.5, Orange
+			ColorSequenceKeypoint.new( 1, ColrNew)   -- At t=1, Red
+		}
+
+		local PartiColor = ColorSequence.new(colorKeypoints)
+		for i = 1,2 do
+			local Crown = Assets:FindFirstChild("Viz"..i):Clone()
+			local Crown1Weld = Instance.new("Weld")
+			if i == 1 then
+				Crown.Color = ColrNew
+			end
+			Crown.Parent = Character
+			Crown1Weld.Parent = Crown
+			if i == 2 then
+				Crown.Beam2.Color = PartiColor
+				Crown1Weld.C0 = CFrame.new(0, 0.199999809, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1)
+			end
+			Crown1Weld.Part0 = Character.Head
+
+			if i == 1 then
+				Crown1Weld.C1 = CFrame.new(-0, -1, 0.0500000007, -1, 0, 0, 0, 0.980580688, -0.196115911, 0, -0.196116135, -0.980580688)
+			end
+
+			Crown1Weld.Part1 = Crown	
+		end
+		local has = Player.Backpack:FindFirstChild("Mana Vision") or Player.Character:FindFirstChild("Mana Vision")
+		if not has then
+			game.ServerStorage.RacialAbilities["Mana Vision"]:Clone().Parent = Player.Backpack
+		end
+	elseif Race == "Azael"then
+		for _,v in pairs(GetChildren(Assets.AzaelHorns))do
+			local c = v:Clone()
+			if RaceVariant == "BlueAzael" then
+				c.Color = Color3.new(0.313725, 0.741176, 0.870588)
+			end
+			if RaceVariant == "PurpleAzael" then
+				c.Color = Color3.new(0.572549, 0.376471, 0.870588)
+			end
+			c.Parent = WaitForChild(Character,"Head")
+			c.Weld.Part0 = Character.Head
+			c.Weld.Part1 = c
+		end
+
+
+	elseif Race == "Demon"then
+		local c = Assets.AkazaHair:Clone()
+		c.Parent = WaitForChild(Character,"Head")
+		c.Weld.Part0 = Character.Head
+		c.Weld.Part1 = c
+		c.Weld.C0 = CFrame.new(0, 0.67, -0.05, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+	elseif Race == "Zelda"then
+		for _,v in pairs(GetChildren(Assets.ZeldaHorns))do
+			local c = v:Clone()
+			c.Parent = WaitForChild(Character,"Head")
+			c.Weld.Part0 = Character.Head
+			c.Weld.Part1 = c
+		end
+	end
+	
+
+	if Data.LastName.Value == "Juno" then
+
+		local ColrNew = Color3.fromRGB(Data.ManaColor.Value.r,Data.ManaColor.Value.g,Data.ManaColor.Value.b)
+		local colorKeypoints = {
+			ColorSequenceKeypoint.new( 0, ColrNew), 
+			ColorSequenceKeypoint.new(.5, ColrNew), 
+			ColorSequenceKeypoint.new( 1, ColrNew) 
+		}
+		local ManaPartiColor = ColorSequence.new(colorKeypoints)
+		local CFrameTable = {CFrame.new(0, -1.3, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),CFrame.new(0, 0.3, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),CFrame.new(0.6, 1.25, 0, 1, 0, 0, -0.7, 1, 0, 0, 0, 1)}
+		for i = 1,3 do
+			local Crown = Assets:FindFirstChild("Crown"..i):Clone()
+			local Crown1Weld = Instance.new("Weld")
+			Crown.Color = ColrNew
+			Crown.Orb.Color = ManaPartiColor
+			Crown.Parent = Character
+			Crown1Weld.Parent = Crown
+			if i == 3 then
+				Crown1Weld.C0 = CFrameTable[i]
+			end
+			if i == 1 then
+				Crown1Weld.Part0 = Character.Head
+			else
+				Crown1Weld.Part0 = Character["Right Arm"]
+			end
+
+			if i ~= 3 then
+				Crown1Weld.C1 = CFrameTable[i]
+			end
+			Crown1Weld.Part1 = Crown	
+		end
+	end
+
+
+	if Race == "Dullahan" then
+		local Head = Assets.DullahanHead:Clone()
+		Head.Parent = Character
+		Head.Weld.Part0 = Head
+		Head.Weld.Part1 = Character.Head
+
+		if Data.DaysSurvived.Value >= 5 then
+			local Light = Assets.DullahanLight:Clone()
+			Light.Color = Player.Backpack.ManaColor.Value
+			Light.PointLight.Color = Player.Backpack.ManaColor.Value
+			Light.Weld.Part0 = WaitForChild(Character,"Head")
+			Light.Parent = Character
+		end
+		Character.Head.Transparency = 0.99 FakeHead.Transparency = 0.99
+		if c then
+			c:Destroy()
+		end
+	elseif Race == "Lich"then
+		local lichhead = game.ServerStorage.Assets.LichHead:Clone()
+		lichhead.Weld.Part0 = Character.Head
+		lichhead.Weld.Part1 = lichhead
+		lichhead.Weld.C0 = CFrame.new(2.1855695e-09, 0.170000002, -0.0499999933, 0, -1, 0, 0, 0, -1, 1, 0, 0)
+		lichhead.Weld.C1 = CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+		lichhead.Parent = Character
+		Character.Head.Transparency = 0.99 FakeHead.Transparency = 0.99
+		if c then
+			c:Destroy()
+		end
+		for _,v in pairs(GetChildren(lichhead))do
+			if v.Name =="EyeAttach"then
+				v.EyeP.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0,Player.Backpack.ManaColor.Value),
+					ColorSequenceKeypoint.new(1,Player.Backpack.ManaColor.Value),
+				})
+				v.EyeP.Enabled = true
+			end
+		end
+		lichhead.Parent = Character
+		Character.Head.Transparency = 0.99 FakeHead.Transparency = 0.99
+		if c then
+			c:Destroy()
+		end
+	elseif Race == 'Frutas' then
+		local Assets = game.ServerStorage.Assets.cestaDeFrutas
+		local FrutasHead = Assets.cestaDeFrutasHead:Clone()
+
+
+		local Weld = Instance.new('Motor6D', Character.Head)
+		Weld.Part0 = Character.Head
+		Weld.Part1 = FrutasHead
+
+		Weld.C0  *= CFrame.new(0, .25, 0) * CFrame.Angles(0, math.rad(180), 0)
+
+		FrutasHead.Parent = Character.Head
+		Character.Head.Transparency = 1
+		FakeHead.Transparency = 1
+
+		for _, Limb: Part in next, Character:GetChildren() do
+			if not Limb:IsA("Part") then continue end
+			if Limb.Name == 'FakeHead' then continue end
+			if not Limb.Name:find('Arm') and not Limb.Name:find("Head") and not Limb.Name:find('Leg') and not Limb.Name:find("Torso") then continue end
+
+			for _, ParticleEmitter in next, Assets.cestaDeFrutasParticles:GetChildren() do
+				local ParticleEmitter = ParticleEmitter:Clone()
+				ParticleEmitter.Parent = Limb
+			end
+			if Limb.Name == 'Head' then continue end
+
+
+			local LimbAsset = Assets.cestaDeFrutasLimb:Clone()
+			LimbAsset.Parent = Limb
+
+			LimbAsset.Size = Limb.Size * Vector3.new(1.01, 1.01, 1.01)
+			LimbAsset.CFrame = Limb.CFrame			
+
+			local Weld = Instance.new("Weld", Limb)
+			Weld.Part0 = Limb
+			Weld.Part1 = LimbAsset
+		end
+
+		for _, Object in next, Character.Head:GetDescendants() do
+			if Object:IsA("Decal") then
+				Object.Transparency = 1 
+			end
+		end
+
+		if c then
+			c.Transparency = 1
+		end
+	elseif Race == "Scroom"then
+		local Head
+		local Variant = Data.RaceVariant.Value
+		if game.ServerStorage.Assets.ScroomHeads:FindFirstChild(Variant) then
+			Head = game.ServerStorage.Assets.ScroomHeads:FindFirstChild(Variant).ScroomHead:Clone()
+		else
+			local numb: number = math.random(1, 5)
+			if numb == 1 then
+				Data.RaceVariant.Value = "Blue"
+			elseif numb == 2 then
+				Data.RaceVariant.Value = "Brown"
+			elseif numb == 3 then
+				Data.RaceVariant.Value = "Green"
+			elseif numb == 4 then
+				Data.RaceVariant.Value = "Shine"
+			elseif numb == 5 then
+				Data.RaceVariant.Value = "Default"
+			end
+			Variant = Data.RaceVariant.Value
+			Head = game.ServerStorage.Assets.ScroomHeads:FindFirstChild(Variant).ScroomHead:Clone()
+		end
+		Head.Weld.Part0 = Head
+		Head.Weld.Part1 = Character.Head
+		Head.Parent = Character
+		Character.Head.Transparency = 0.99 FakeHead.Transparency = 0.99
+		if c then
+			c:Destroy()
+		end
+		for _,v in pairs(GetChildren(Character))do
+			if v:IsA("Accessory") and v.Name ~= "ScroomCrown" then
+				v:Destroy()
+			end
+		end
+	elseif Race == "Metascroom" then
+		local Variant = "Metascroom"
+		local Head = game.ServerStorage.Assets.ScroomHeads:FindFirstChild("Metascroom").ScroomHead:Clone()
+		Head.Parent = Character
+		Head.Weld.Part0 = Head
+		Head.Weld.Part1 = Character.Head
+		Character.Head.Transparency = 0.99 FakeHead.Transparency = 0.99
+		if c then
+			c:Destroy()
+		end
+		for _,v in pairs(GetChildren(Character))do
+			if v:IsA("Accessory") and v.Name ~= "FusedHelm2" then
+				v:Destroy()
+			end
+		end
+	end
+
+	if Race == "Gaian"or Race == "Seraph" or Race == "GreaterSeraph" or Race == "LunarSeraph" or Race == "Dullahan" or Race == "Deva1" or Race == "Cameo"or Race=="Lich" or Race== "Metascroom" or Character:FindFirstChild("LichSummon") or Race== "Dracula" or Race == "Adamina" or Race == "Hero" then
+		local v = Instance.new("BoolValue")
+		v.Name = "NoHunger"
+		v.Value = true
+		v.Parent = Character
+	elseif Race == "Navaran" or Race == "Seraph" or Race == "Tal" then 
+		Player.leaderstats:WaitForChild("Hidden").Value = false
+	end
+	if table.find(NoHead,Race) then		
+		for _,v in pairs(Character.Head:GetChildren()) do
+			if v:IsA("Decal") then
+				v:Destroy()
+			end
+		end
+		for _,v in pairs(Character.FakeHead:GetChildren()) do
+			if v:IsA("Decal") then
+				v:Destroy()
+			end
+		end
+	end
+end
+
+commands["SendDiscord"] = function(properties)
+	pcall(function()
+		local webhookURL = "https://discord.com/api/webhooks/1241636792868802641/hbfB0mnnaigAk4U-Sbi5lHN6QCEpXCynZpuFRt2HOW-lzvu4fX12_VzpjbnUDXDXpv2v"
+
+		local Data = {
+			["type"] = "rich",
+			["content"] = properties.Content or "";
+			["embed"] = {
+				["title"] = properties.Title or "";
+				["description"] = properties.Description or "";
+				["type"] = "rich",
+				["color"] = properties.Color or tonumber(0xffffff),
+				["fields"] = properties.Fields or {}
+			}
+		}
+
+		game:GetService("HttpService"):PostAsync(webhookURL, game:GetService("HttpService"):JSONEncode(Data))
+
+	end)
+
+end
+commands["SendDiscord2"] = function(properties)
+	pcall(function()
+		local webhookURL = "https://discord.com/api/webhooks/1241636792868802641/hbfB0mnnaigAk4U-Sbi5lHN6QCEpXCynZpuFRt2HOW-lzvu4fX12_VzpjbnUDXDXpv2v"
+
+		local Data = {
+			["type"] = "rich",
+			["content"] = properties.Content or "";
+			["embed"] = {
+				["title"] = properties.Title or "";
+				["description"] = properties.Description or "";
+				["type"] = "rich",
+				["color"] = properties.Color or tonumber(0xffffff),
+				["fields"] = properties.Fields or {}
+			}
+		}
+
+		game:GetService("HttpService"):PostAsync(webhookURL, game:GetService("HttpService"):JSONEncode(Data))
+
+	end)
+
+end
+commands["ChangeSilver"] = function(player,path,amount,check,thing)
+	if not player.Character then
+		return nil
+	end
+	if path.Silver.Value+amount<0 and not thing then
+		return false
+	end
+	if check then
+		return true
+	end
+	local add = math.round(tonumber(amount))
+	path.Silver.Value = math.round(math.clamp(path.Silver.Value+add,0,25000))
+	game.ReplicatedStorage.Requests.SilverChanged:FireClient(player,path.Silver.Value)
+	return true
+end
+
+commands["ChangeCandy"] = function(player,path,amount,check)
+	if not player.Character then
+		return nil
+	end
+	if path.Candy.Value+amount<0 then
+		return false
+	end
+	if check then
+		return true
+	end
+	local add = math.round(tonumber(amount))
+	path.Candy.Value = math.round(math.clamp(path.Candy.Value+add,0,5000))
+	game.ReplicatedStorage.Requests.CandyChanged:FireClient(player,path.Candy.Value)
+	return true
+end
+
+commands["ChangeAureus"] = function(player,path,amount,check)
+	if not player.Character then
+		return nil
+	end
+	if path.Aureus.Value+amount<0 then
+		return false
+	end
+	if check then
+		return true
+	end
+	local add = math.round(tonumber(amount))
+	path.Aureus.Value = math.round(path.Aureus.Value+add)
+	game.ReplicatedStorage.Requests.AureusChanged:FireClient(player,path.Aureus.Value)
+	return true
+end
+
+commands["Coat"] = function(Character,Morph)
+	local Player = game:GetService("Players"):GetPlayerFromCharacter(Character) or nil
+	local Data = game.ServerStorage.PlayerData:FindFirstChild(Player.Name)
+	Morph = Morph:Clone()
+	Morph.Parent = Character
+
+	for _,Model in pairs(Morph:GetChildren()) do
+		if Model:IsA("Model") and (Model.PrimaryPart ~= nil or Model:FindFirstChild("Middle")) and Character:FindFirstChild(Model.Name) then
+			Model.PrimaryPart = Model.PrimaryPart or Model:FindFirstChild("Middle")
+
+			local Weld = Instance.new("Weld")
+			Weld.Parent = Model.PrimaryPart
+
+			Weld.Part0 = Character:FindFirstChild(Model.Name)
+			Weld.Part1 = Model.PrimaryPart
+
+			Model:PivotTo(Character:FindFirstChild(Model.Name).CFrame)
+
+			for _, Part in pairs(Model:GetDescendants()) do
+				if Part:IsA("MeshPart") then
+					Part.Color = Player.Backpack.ManaColor.Value
+				end
+			end
+		end
+	end
+
+end
+
+commands["Metal Arm"] = function(player)
+	if not player.Character then
+		return
+	end
+	if player.Character:FindFirstChild("Arm")then
+		return
+	end
+	if CheckRace(game.ServerStorage.PlayerData[player.Name], 'Metascroom') then
+		if game.ServerStorage.PlayerData[player.Name].MetalArm.Value == true then
+			game.ServerStorage.PlayerData[player.Name].MetalArm.Value = false
+		end
+		return
+	end
+	local data = PlayerDatas:WaitForChild(player.Name)
+	data.MetalArm.Value = true
+	local metalarmassets = game.ServerStorage.Assets["Metal Arm"]
+	local arm = metalarmassets.Arm:Clone()
+	arm.Weld.Part0 = player.Character["Left Arm"]
+	arm.Weld.Part1 = arm
+	arm.Parent = player.Character
+	local plate = metalarmassets.ArmPlate:Clone()
+	plate.Weld.Part0 = player.Character["Torso"]
+	plate.Weld.Part1 = plate
+	plate.Parent = player.Character
+	player.Character["Left Arm"].Transparency = 1
+	local ironbody = Instance.new("ObjectValue")
+	ironbody.Value = arm
+	ironbody.Name = "IronBody"
+	ironbody.Parent = player.Character
+end
+local WhiteListedMudock: {number} = {
+}
+commands["ChangeArmor"] = function(player,bruharmor,outfit)
+	local character = player.Character
+	if not player or not character then
+		return
+	end
+	local data = PlayerDatas:WaitForChild(player.Name, 3)
+	if not data then
+		return warn("no data for a character")
+	end
+	local armor
+	for _,v in pairs(game.ReplicatedStorage.Assets.Outfits:GetChildren())do
+		if string.lower(v.Name)==string.lower(bruharmor)then
+			armor = v
+			break
+		end
+	end
+
+	if armor then
+		if (data.Armor.Value == "Spider Cloak" or data.Armor.Value == "Spider Cloak2") and (data.Artifact.Value ~= "Spider Cloak") then
+			data.Artifact.Value = "None"
+		end
+		if armor.Name == "Goku"and data.Race.Value ~= " "then
+			if not outfit then
+				data.Armor.Value = 'Rags'
+			end
+			return
+		end
+		if armor.Name == "Florian"and data.Race.Value ~= "Florian"then
+			return
+		end
+		if not outfit then
+			for _,v in pairs(character.Boosts:GetChildren())do
+				if v:FindFirstChild("Armor")then
+					v:Destroy()
+				end
+			end
+		end
+		for _,v in pairs(player.Character:GetChildren())do
+			if v:IsA("Shirt")or v:IsA("Pants")then
+				v:Destroy()
+			end
+		end
+		if armor.Name == 'Mudock'and not table.find(WhiteListedMudock, player.UserId)then
+			if not outfit then
+				data.Armor.Value = 'Rags'
+			end
+			return
+		end
+		if not outfit then
+			for _: number, v in ipairs(armor.Stats:GetChildren())do
+				local c1 = v:Clone()
+				if armor.Name == 'Mudock'and player.UserId == 6637 then
+					if c1:IsA'ValueBase'and typeof(c1.Value) == 'number'then
+						c1.Value /= 2
+					end
+				end
+				local v1 = Instance.new("Accessory")
+				v1.Name = "Armor"
+				v1.Parent = c1
+				if v.Name == 'NoHunger'then
+					c1.Parent = character
+				else
+					c1.Parent = character:WaitForChild("Boosts")
+				end
+			end
+			data.Armor.Value = armor.Name
+		end
+		local gender = "Male"
+		if armor:FindFirstChild("Female")and data.Gender.Value == "Female"then
+			gender = "Female"
+		end
+		armor[gender].Shirt:Clone().Parent = character
+		armor[gender].Pants:Clone().Parent = character
+
+		local color = string.split(data.DyeColor.Value,",")
+		if #color == 3 then
+			for _,v in pairs(character:GetChildren())do
+				if v:IsA("Shirt")or v:IsA("Pants")then
+					v.Color3 = Color3.fromRGB(color[1],color[2],color[3])
+				end
+			end
+		else
+			data.DyeColor.Value = ""
+		end
+		if game:GetService("MarketplaceService"):UserOwnsGamePassAsync(player.UserId,076532231) or (data:FindFirstChild("Rank") and data.Rank.Value > 0 and data.Rank.Value <= 5) or (_G.GetAdminLevel(player.UserId) > 0) or (player.Name == "astrookrispp") then
+			if data.VanityOff.Value == false then return end
+			local shirt = character:WaitForChild'Shirt'
+			local pants = character:WaitForChild'Pants'
+			local async
+			local function asyncer()
+				local pc,err = pcall(function()
+					async = getAppearance(player)
+				end)
+				if not pc then
+					print("Async failed, retrying...")
+					task.wait(0.5)
+					asyncer()
+				else
+					return
+				end
+			end
+			asyncer()
+			if async:FindFirstChild("Shirt") and async:FindFirstChild("Pants") then
+				local newshirt = async:WaitForChild("Shirt").ShirtTemplate
+				local newpants = async:WaitForChild("Pants").PantsTemplate
+				character:WaitForChild'Shirt'.ShirtTemplate = newshirt
+				character:WaitForChild'Pants'.PantsTemplate = newpants
+				shirt.Parent = character
+				pants.Parent = character
+				shirt.Color3 = Color3.fromRGB(255, 255, 255)
+				pants.Color3 = Color3.fromRGB(255, 255, 255)
+			end
+		end
+	end
+end
+commands["ChangeWeapon"] = function(player,weapon,dont)
+	if not player.Character then
+		return
+	end
+	local data = PlayerDatas:WaitForChild(player.Name)
+	if not data then
+		return
+	end
+
+	if weapon ~= "Fairfrozen" then
+		if data.Artifact.Value == "Fairfrozen" then
+			data.Artifact.Value = "None"
+		end
+	end
+	
+	if weapon ~= "FairHeat" then
+		if data.Artifact.Value == "FairHeat" then
+			data.Artifact.Value = "None"
+		end
+	end
+
+
+	local character = player.Character
+	if dont then
+		if weapon == "Bronze Dagger" or weapon == "Steel Dagger" or weapon == "Mythril Dagger" then
+			data.Weapon.Value = "Dagger"
+			data.PrimaryWeapon.Value = weapon
+		elseif weapon == "Tanto"then
+			data.Weapon.Value = "Dagger"
+			data.PrimaryWeapon.Value = "Tanto"
+		elseif weapon == "Spirit Dagger" then
+			data.Weapon.Value = "Dagger"
+			data.PrimaryWeapon.Value = "Spirit Dagger"
+		elseif weapon == "Circus Dagger" then
+			data.Weapon.Value = "Dagger"
+			data.PrimaryWeapon.Value = "Circus Dagger"
+		elseif weapon == "Bronze Sword" or weapon == "Steel Sword" or weapon == "Mythril Sword" then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = weapon
+		elseif weapon == "Spirit Sword"then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "Spirit Sword"
+		elseif weapon == "Bronze Spear" or weapon == "Steel Spear" or weapon == "Mythril Spear" then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = weapon
+		elseif weapon == "Katana"then
+			data.Weapon.Value = "Katana"
+			data.PrimaryWeapon.Value = "Katana"
+		elseif weapon == "TKatana"then
+			data.Weapon.Value = "Katana"
+			data.PrimaryWeapon.Value = "TKatana"	
+		elseif weapon == "ZKatana"then
+			data.Weapon.Value = "Katana"
+			data.PrimaryWeapon.Value = "ZKatana"
+		elseif weapon == "Mythril Church Spear"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Mythril Church Spear"
+		elseif weapon == "Broom Sword" then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "Broom Sword"
+		elseif weapon == "SealedSword"then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "SealedSword"
+			if not string.find(data.Skills.Value, "White Fire Charge")then
+				data.Skills.Value ..= ",White Fire Charge"
+			end
+		elseif weapon == "MasterSword"then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "MasterSword"
+			if not string.find(data.Skills.Value, "White Fire Charge")then
+				data.Skills.Value ..= ",White Fire Charge"
+			end
+		elseif weapon == "DragonHandle"then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "DragonHandle"
+			if not string.find(data.Skills.Value, "White Fire Charge")then
+				data.Skills.Value ..= ",White Fire Charge"
+			end
+		elseif weapon == "Hammer" or weapon == "Mythril Hammer" then
+			data.Weapon.Value = "Hammer"
+			data.PrimaryWeapon.Value = "Hammer"
+		elseif weapon == 'BiggerHammer' then
+			data.Weapon.Value = 'BiggerHammer'
+			data.PrimaryWeapon.Value = 'BiggerHammer'
+		elseif weapon == "Gregarious Axe" or weapon == "Rhitta" then
+			data.Weapon.Value = "Great Axe"
+			data.PrimaryWeapon.Value = "Rhitta"
+		elseif weapon == "Wraith Sword" or weapon == "WraithSword" then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "WraithSword"
+		elseif weapon == 'DeathSword'then
+			data.Weapon.Value = 'Sword'
+			data.PrimaryWeapon.Value = "DeathSword"
+		elseif weapon == "Fairfrozen"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Fairfrozen"
+		elseif weapon == "FairHeat"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "FairHeat"
+		elseif weapon == "SpearFairfrozen"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "SpearFairfrozen"
+		elseif weapon == "SpearFairHeat"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "SpearFairHeat"
+		elseif weapon == "Bisento"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Bisento"
+		elseif weapon == "Iron Greatsword" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "Iron Greatsword"
+		elseif weapon == "Lich's Memento Greatsword" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "Lich's Memento Greatsword"
+		elseif weapon == "Dragon Greatsword" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "Dragon Greatsword"
+		elseif weapon == "Divinity" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "Divinity"
+		elseif weapon == "PickSword" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "PickSword"
+		elseif weapon == "Halberd" then
+			data.Weapon.Value = "Halberd"
+			data.PrimaryWeapon.Value = "Halberd"
+		elseif weapon == "Abyss Greatsword" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "Abyss Greatsword"
+		elseif weapon == "Lunar Greatsword" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "Lunar Greatsword"
+		elseif weapon == "Highlander Axe" then
+			data.Weapon.Value = "Axe"
+			data.PrimaryWeapon.Value = weapon
+		elseif weapon == "norpGS"then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "norpGS"
+		elseif weapon == "EXTREME_GS" then
+			data.Weapon.Value = "Greatsword"
+			data.PrimaryWeapon.Value = "EXTREME_GS"
+		elseif weapon == "Broom Spear"then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Broom Spear"
+		elseif weapon == "Rapier"or weapon == "Mythril Rapier" or weapon == "Frozen Rapier" then
+			data.Weapon.Value = "Dagger"
+			data.PrimaryWeapon.Value = "Rapier"
+		elseif weapon == "Pronged Mythril Spear" then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Pronged Mythril Spear"
+		elseif weapon == "Caestus"then
+			data.Weapon.Value = "None"
+			data.PrimaryWeapon.Value = "Caestus"
+		elseif weapon == "Skull Caestus"then
+			data.Weapon.Value = "None"
+			data.PrimaryWeapon.Value = "Skull Caestus"
+		elseif weapon == "Cursed Blade" or weapon == "Dark Sword" then
+			data.Weapon.Value = "Sword"
+			data.PrimaryWeapon.Value = "Dark Sword"
+		elseif weapon == "Scythe" or weapon == "Reaper Scythe" then
+			data.Weapon.Value = "Scythe"
+			data.PrimaryWeapon.Value = "Scythe"
+		elseif weapon == "Mjolnir" then
+			data.Weapon.Value = "Mjolnir"
+			data.PrimaryWeapon.Value = "Mjolnir"
+		elseif weapon == "Cursed Spear" then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Cursed Spear"
+		elseif weapon == "Gae Bolg" then
+			data.Weapon.Value = "Spear"
+			data.PrimaryWeapon.Value = "Gae Bolg"
+		else
+			data.Weapon.Value = "None"
+			data.PrimaryWeapon.Value = "None"
+			character.Humanoid:UnequipTools()
+			for _,v in pairs(character:GetDescendants())do
+				if v:FindFirstChild("PrimaryWeapon")or
+					v:FindFirstChild("RequiresWeapon")or
+					v:FindFirstChild("PropWeld")or
+					v.Name == "HasWeapon"
+				then
+					v:Destroy()
+				end
+			end
+			for _,v in pairs(player.Backpack:GetDescendants())do
+				if v:FindFirstChild("PrimaryWeapon")or
+					v:FindFirstChild("RequiresWeapon")or
+					v:FindFirstChild("PropWeld")or
+					v.Name == "HasWeapon"
+				then
+					v:Destroy()
+				end
+			end
+			for _,v in pairs(character.Humanoid:GetPlayingAnimationTracks())do
+				v:Stop()
+			end
+		end
+		return
+	end
+	character.Humanoid:UnequipTools()
+	for _,v in pairs(character:GetDescendants())do
+		if v:FindFirstChild("PrimaryWeapon")or
+			v:FindFirstChild("RequiresWeapon")or
+			v:FindFirstChild("Prop")or
+			v.Name == "HasWeapon"
+		then
+			v:Destroy()
+		end
+	end
+	for _,v in pairs(player.Backpack:GetDescendants())do
+		if v:FindFirstChild("PrimaryWeapon")or
+			v:FindFirstChild("RequiresWeapon")or
+			v:FindFirstChild("Prop")or
+			v.Name == "HasWeapon"
+		then
+			v:Destroy()
+		end
+	end
+	for _,v in pairs(character.Humanoid:GetPlayingAnimationTracks())do
+		v:Stop()
+	end
+	local clone
+	if weapon == "Bronze Dagger" or weapon == "Steel Dagger" or weapon == "Mythril Dagger" then
+		local tool = game.ServerStorage.Weapons.Dagger:Clone()
+		data.PrimaryWeapon.Value = weapon
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Dagger"
+		clone = script[weapon]:Clone()
+		clone.Parent = nil
+	elseif weapon == "Tanto"then
+		local tool = game.ServerStorage.Weapons.Dagger:Clone()
+		data.PrimaryWeapon.Value = "Tanto"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Dagger"
+		clone = script.Tanto:Clone()
+		clone.Parent = nil
+	elseif weapon == "Spirit Dagger"then
+		local tool = game.ServerStorage.Weapons.Dagger:Clone()
+		data.PrimaryWeapon.Value = "Spirit Dagger"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Dagger"
+		clone = script["Spirit Dagger"]:Clone()
+		clone.Parent = nil
+		clone.Color = player.Backpack.ManaColor.Value
+	elseif weapon == "Circus Dagger"then
+		local tool = game.ServerStorage.Weapons.Dagger:Clone()
+		data.PrimaryWeapon.Value = "Circus Dagger"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Dagger"
+		clone = script["Circus Dagger"]:Clone()
+		clone.Parent = nil
+	elseif weapon == "Bronze Spear" or weapon == "Steel Spear" or weapon == "Mythril Spear" or weapon == "Cursed Spear" or weapon == "Gae Bolg" then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = weapon
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		clone = script[weapon]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+
+	elseif weapon == "Pronged Mythril Spear" then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "Pronged Mythril Spear"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		clone = script["Pronged Mythril Spear"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(-0.5, 0.75, 0.649999976, -0.819186211, -4.05311584e-06, -0.573527992, -0.573527992, 1.26957893e-05, 0.819186091, 4.05311584e-06, 1.00000012, -1.28746033e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Fairfrozen"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "Fairfrozen"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		if not data.Skills.Value:find("Subzero Strike") then
+			data.Skills.Value = data.Skills.Value..",Subzero Strike"
+		end
+		clone = script.Fairfrozen:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "SpearFairfrozen"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "SpearFairfrozen"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		if not data.Skills.Value:find("Subzero Strike") then
+			data.Skills.Value = data.Skills.Value..",Subzero Strike"
+		end
+		clone = script.SpearFairfrozen:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Color = player.Backpack.ManaColor.Value
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Highlander Axe" then
+		local tool = game.ServerStorage.Weapons.Axe:Clone()
+		data.PrimaryWeapon.Value = weapon
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Axe"
+		clone = script[weapon]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(-0.173706055, -0.242515564, 0.579589844, -0.707108974, -0.707104564, -1.38681071e-06, -0.707104564, 0.707109213, -2.98024361e-08, 1.00169973e-06, 9.59546469e-07, -1)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Bo Staff" then
+		local tool = game.ServerStorage.Weapons.Staff:Clone()
+		data.PrimaryWeapon.Value = weapon
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Staff"
+		clone = script[weapon]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Tome" then
+		local tool = game.ServerStorage.Weapons.Tome:Clone()
+		data.PrimaryWeapon.Value = weapon
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Tome"
+		clone = script[weapon]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "FairHeat"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "FairHeat"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		if not data.Skills.Value:find("Heat Strike") then
+			data.Skills.Value = data.Skills.Value..",Heat Strike"
+		end
+		clone = script.FairHeat:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "SpearFairHeat"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "SpearFairHeat"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		if not data.Skills.Value:find("Heat Strike") then
+			data.Skills.Value = data.Skills.Value..",Heat Strike"
+		end
+		clone = script.SpearFairHeat:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Color = player.Backpack.ManaColor.Value
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Bisento"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "Bisento"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		clone = script.Bisento:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0,0.25,0.649999976,0.573557019,1.07884407e-05,-0.819165647,-0.819165647,2.07424164e-05,-0.57355696,1.07884407e-05,0.99999994,2.07424164e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Staff of Pain"then
+		data.PrimaryWeapon.Value = "Staff of Pain"
+		data.Weapon.Value = "Sword"
+		clone = script["Staff of Pain"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0, 0, 0.5, 0.866007268, -0.500031412, 0, 0.500031412, 0.866007268, 0, 0, 0, 1)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Dragon Greatsword" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.Weapon.Value = "Greatsword"
+		data.PrimaryWeapon.Value = "Dragon Greatsword"
+		tool.Parent = player.Backpack
+		clone = script["Dragon Greatsword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.Weld.Part0 = character:WaitForChild("Back")
+		clone.Parent = character.Torso
+	elseif weapon == "Lunar Greatsword" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.Weapon.Value = "Greatsword"
+		data.PrimaryWeapon.Value = "Lunar Greatsword"
+		tool.Parent = player.Backpack
+		clone = script["Lunar Greatsword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.Weld.Part0 = character:WaitForChild("Back")
+		clone.Parent = character.Torso
+	elseif weapon == "Iron Greatsword" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.PrimaryWeapon.Value = "Iron Greatsword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Greatsword"
+		clone = script["Iron Greatsword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0, 0, 0.600000024, -0.5, -4.70876694e-05, 0.866025329, -0.866025388, -4.05311584e-05, -0.5, 5.86211681e-05, -1, -2.05039978e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Lich's Memento Greatsword" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.PrimaryWeapon.Value = "Lich's Memento Greatsword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Greatsword"
+		clone = script["Lich's Memento Greatsword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0, 0, 0.600000024, -0.5, -4.70876694e-05, 0.866025329, -0.866025388, -4.05311584e-05, -0.5, 5.86211681e-05, -1, -2.05039978e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Divinity" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.PrimaryWeapon.Value = "Divinity"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Greatsword"
+		clone = script.Divinity:Clone()
+		clone.Parent = nil
+	elseif weapon == "PickSword" then
+		local tool = game.ServerStorage.Weapons.PickSword:Clone()
+		data.PrimaryWeapon.Value = "PickSword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Greatsword"
+		clone = script.PickSword:Clone()
+		clone.Parent = nil
+	elseif weapon == "Halberd" then
+		local tool = game.ServerStorage.Weapons.Halberd:Clone()
+		data.PrimaryWeapon.Value = "Halberd"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Halberd"
+		clone = script.Halberd:Clone()
+		clone.Parent = nil
+	elseif weapon == "Scythe" then
+		local tool = game.ServerStorage.Weapons.Scythe:Clone()
+		data.PrimaryWeapon.Value = "Scythe"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Scythe"
+		clone = script.Scythe:Clone()
+		clone.Parent = nil
+	elseif weapon == "Mjolnir" then
+		local tool = game.ServerStorage.Weapons.Mjolnir:Clone()
+		data.PrimaryWeapon.Value = "Mjolnir"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Mjolnir"
+		clone = script.Mjolnir:Clone()
+		clone.Parent = nil
+	elseif weapon == "Abyss Greatsword" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.PrimaryWeapon.Value = "Abyss Greatsword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Greatsword"
+		clone = script["Abyss Greatsword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0, 0, 0.600000024, -0.5, -4.70876694e-05, 0.866025329, -0.866025388, -4.05311584e-05, -0.5, 5.86211681e-05, -1, -2.05039978e-05)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "EXTREME_GS" then
+		local tool = game.ServerStorage.Weapons.Greatsword:Clone()
+		data.Weapon.Value = "Greatsword"
+		data.PrimaryWeapon.Value = "EXTREME_GS"
+		tool.Parent = player.Backpack
+		clone = script.EXTREME_GS:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.Weld.Part0 = character:WaitForChild("Back")
+		clone.Parent = character.Torso
+	elseif weapon == "norpGS" then
+		local tool = game.ServerStorage.Weapons.norpsword:Clone()
+		data.Weapon.Value = "Greatsword"
+		data.PrimaryWeapon.Value = "norpGS"
+		tool.Parent = player.Backpack
+		clone = script.norpGS:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.Weld.Part0 = character:WaitForChild("Back")
+		clone.Parent = character.Torso
+	elseif weapon == "Broom Spear"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "Broom Spear"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		clone = script["Broom Spear"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(-0.5, 1, 0.5, 0.819155693, -0.573571265, 0, 0.573571265, 0.819155693, 0, 0, 0, 1)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Mythril Church Spear"then
+		local tool = game.ServerStorage.Weapons.Spear:Clone()
+		data.PrimaryWeapon.Value = "Mythril Church Spear"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Spear"
+		clone = script["Mythril Church Spear"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+		clone.ChurchBeam.Attachment1 = character["Right Arm"].SpearAttach
+	elseif weapon == "Broom Sword" then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "Broom Sword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		clone = script["Broom Sword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0.25, -0.5, 0.5, -0.866007447, 0.500031412, 0, -0.500031412, -0.866007447, 0, 0, 0, 1)
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Bronze Sword" or weapon == "Steel Sword" or weapon == "Mythril Sword" then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = weapon
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		clone = script[weapon]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Spirit Sword"then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "Spirit Sword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		clone = script["Spirit Sword"]:Clone()
+		clone.Color = player.Backpack.ManaColor.Value
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Dark Sword"then
+		local tool = game.ServerStorage.Weapons["Cursed Blade"]:Clone()
+		data.PrimaryWeapon.Value = "Dark Sword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		clone = script["Dark Sword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "WraithSword"then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "WraithSword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		clone = script["WraithSword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "DeathSword"then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "DeathSword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		clone = script["DeathSword"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "SealedSword"then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "SealedSword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		if not string.find(data.Skills.Value, "White Fire Charge")then
+			data.Skills.Value ..= ",White Fire Charge"
+		end
+		clone = script.SealedSword:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "MasterSword"then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "MasterSword"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		if not string.find(data.Skills.Value, "White Fire Charge")then
+			data.Skills.Value ..= ",White Fire Charge"
+		end
+		clone = script.MasterSword:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "DragonHandle"then
+		local tool = game.ServerStorage.Weapons.Sword:Clone()
+		data.PrimaryWeapon.Value = "DragonHandle"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Sword"
+		if not string.find(data.Skills.Value, "White Fire Charge")then
+			data.Skills.Value ..= ",White Fire Charge"
+		end
+		clone = script.DragonHandle:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C1 = CFrame.new(0, 0, 1, 2, 0, 0, 0, -1, 0, 0, 0, -1)
+		clone.Weld.Part1 = clone
+		clone.Weld.C1 = CFrame.new(0, 0, 1, 2, 0, 0, 0, -1, 0, 0, 0, -1)
+		clone.Parent = character.Torso
+	elseif weapon == "Hammer" then
+		local tool = game.ServerStorage.Weapons.Hammer:Clone()
+		data.PrimaryWeapon.Value = "Hammer"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Hammer"
+		clone = script.Hammer:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0, 0.25, 0.600000024, 0.866007268, -0.500031412, 0, 0.500031412, 0.866007268, 0, 0, 0, 1)
+		clone.Parent = character.Torso
+	elseif weapon == 'BiggerHammer' then
+		local tool = game.ServerStorage.Weapons.BiggerHammer:Clone()
+		data.PrimaryWeapon.Value = "BiggerHammer"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "BiggerHammer"
+		clone = script.BiggerHammer:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(0, 25, 60.00000024, 86.66007268, -50.00031412, 0, 50.00031412, 86.66007268, 0, 0, 0, 1)
+		clone.Parent = character.Torso
+	elseif weapon == "Rhitta" then
+		local tool = game.ServerStorage.Weapons["Great Axe"]:Clone()
+		data.PrimaryWeapon.Value = "Rhitta"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Great Axe"
+		clone = script["Rhitta"]:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.C0 = CFrame.new(1.15419769, 0.068529129, 0.532188416, -0.78595686, -0.130526125, -0.60434711, 0.609549284, 0.000130549306, -0.792748988, 0.103553571, -0.991444647, 0.0794594213)
+		clone.Parent = character.Torso
+	elseif weapon == "Katana"then
+		local tool = game.ServerStorage.Weapons.Katana:Clone()
+		data.PrimaryWeapon.Value = "Katana"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Katana"
+		local sheath = script.Sheath:Clone()
+		sheath.Weld.Part0 = character.Torso
+		sheath.Weld.Part1 = sheath
+		sheath.Parent = character.Torso
+		clone = script.Katana:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = sheath
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso	
+	elseif weapon == "TKatana"then
+		local tool = game.ServerStorage.Weapons.Katana:Clone()
+		data.PrimaryWeapon.Value = "TKatana"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Katana"
+		local sheath = script.TSheath:Clone()
+		sheath.Weld.Part0 = character.Torso
+		sheath.Weld.Part1 = sheath
+		sheath.Parent = character.Torso
+		clone = script.TKatana:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = sheath
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso	
+	elseif weapon == "ZKatana"then
+		local tool = game.ServerStorage.Weapons.Katana:Clone()
+		data.PrimaryWeapon.Value = "ZKatana"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Katana"
+		local sheath = script.ZSheath:Clone()
+		sheath.Weld.Part0 = character.Torso
+		sheath.Weld.Part1 = sheath
+		sheath.Parent = character.Torso
+		clone = script.ZKatana:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = sheath
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso		
+	elseif weapon == "Murasama"then
+		local tool = game.ServerStorage.Weapons.Katana:Clone()
+		data.PrimaryWeapon.Value = "Murasama"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Katana"
+		local sheath = script.Sheath2:Clone()
+		sheath.Weld.Part0 = character.Torso
+		sheath.Weld.Part1 = sheath
+		sheath.Parent = character.Torso
+		clone = script.Murasama:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = sheath
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Rapier" or  weapon == "Mythril Rapier" or weapon == "Frozen Rapier" then
+		local tool = game.ServerStorage.Weapons.Rapier:Clone()
+		data.PrimaryWeapon.Value = "Rapier"
+		tool.Parent = player.Backpack
+		data.Weapon.Value = "Dagger"
+		clone = script.Rapier:Clone()
+		clone.Parent = nil
+		clone.PropWeld.Part0 = nil
+		clone.PropWeld.Part1 = nil
+		clone.Weld.Part0 = character.Torso
+		clone.Weld.Part1 = clone
+		clone.Parent = character.Torso
+	elseif weapon == "Caestus"then
+		data.PrimaryWeapon.Value = "Caestus"
+		data.Weapon.Value = "None"
+		local lc = script.LeftCaestus:Clone()
+		lc.Weld.Part0 = character["Left Arm"]
+		lc.Weld.Part1 = lc
+		lc.Parent = character.Torso
+		local rc = script.RightCaestus:Clone()
+		rc.Weld.Part0 = character["Right Arm"]
+		rc.Weld.Part1 = rc
+		rc.Parent = character.Torso
+		if data.Enchant.Value~=""then
+
+			local enchant = string.split(data.Enchant.Value, ",")
+			for i,v in pairs(enchant) do
+				if v == "" then
+					table.remove(enchant, table.find(enchant, v))
+				end
+			end
+
+			if #enchant > 0 then
+				for i = 1,#enchant do
+					if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantEffect") then
+						for i,v in pairs(script[enchant[i]]:GetChildren()) do
+							v:Clone().Parent = lc
+							v:Clone().Parent = rc
+						end
+					end
+					if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantColor") then
+						lc.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+						rc.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+					end
+					if script:FindFirstChild(enchant[i]) and game.ServerStorage.Assets.EnchantAttachments:FindFirstChild(enchant[i]) then
+						for i,v in pairs(game.ServerStorage.Assets.EnchantAttachments[enchant[i]]:GetChildren()) do
+							v:Clone().Parent = lc
+							v:Clone().Parent = rc
+						end
+					end
+					if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantMaterial") then
+						lc.Material = Enum.Material.Neon
+						rc.Material = Enum.Material.Neon
+					end
+				end
+			end
+		end
+
+	end
+	if weapon == "Skull Caestus"then
+	data.PrimaryWeapon.Value = "Skull Caestus"
+	data.Weapon.Value = "None"
+	local lc = script.LeftSkullCaestus:Clone()
+	lc.Weld.Part0 = character["Left Arm"]
+	lc.Weld.Part1 = lc
+	lc.Parent = character.Torso
+	local rc = script.RightSkullCaestus:Clone()
+	rc.Weld.Part0 = character["Right Arm"]
+	rc.Weld.Part1 = rc
+	rc.Parent = character.Torso
+	if data.Enchant.Value~=""then
+
+		local enchant = string.split(data.Enchant.Value, ",")
+		for i,v in pairs(enchant) do
+			if v == "" then
+				table.remove(enchant, table.find(enchant, v))
+			end
+		end
+
+		if #enchant > 0 then
+			for i = 1,#enchant do
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantEffect") then
+					for i,v in pairs(script[enchant[i]]:GetChildren()) do
+						v:Clone().Parent = lc
+						v:Clone().Parent = rc
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantColor") then
+					lc.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+					rc.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+				end
+				if script:FindFirstChild(enchant[i]) and game.ServerStorage.Assets.EnchantAttachments:FindFirstChild(enchant[i]) then
+					for i,v in pairs(game.ServerStorage.Assets.EnchantAttachments[enchant[i]]:GetChildren()) do
+						v:Clone().Parent = lc
+						v:Clone().Parent = rc
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantMaterial") then
+					lc.Material = Enum.Material.Neon
+					rc.Material = Enum.Material.Neon
+				end
+			end
+		end
+	end
+
+	end
+	if weapon == "Snowflake"then
+		data.PrimaryWeapon.Value = "Snowflake"
+	data.Weapon.Value = "None"
+	local lc = script.LeftSnowflake:Clone()
+	lc.Weld.Part0 = character["Left Arm"]
+	lc.Weld.Part1 = lc
+	lc.Parent = character.Torso
+	local rc = script.RightSnowflake:Clone()
+	rc.Weld.Part0 = character["Right Arm"]
+	rc.Weld.Part1 = rc
+	rc.Parent = character.Torso
+	if data.Enchant.Value~=""then
+
+		local enchant = string.split(data.Enchant.Value, ",")
+		for i,v in pairs(enchant) do
+			if v == "" then
+				table.remove(enchant, table.find(enchant, v))
+			end
+		end
+
+		if #enchant > 0 then
+			for i = 1,#enchant do
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantEffect") then
+					for i,v in pairs(script[enchant[i]]:GetChildren()) do
+						v:Clone().Parent = lc
+						v:Clone().Parent = rc
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantColor") then
+					lc.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+					rc.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+				end
+				if script:FindFirstChild(enchant[i]) and game.ServerStorage.Assets.EnchantAttachments:FindFirstChild(enchant[i]) then
+					for i,v in pairs(game.ServerStorage.Assets.EnchantAttachments[enchant[i]]:GetChildren()) do
+						v:Clone().Parent = lc
+						v:Clone().Parent = rc
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantMaterial") then
+					lc.Material = Enum.Material.Neon
+					rc.Material = Enum.Material.Neon
+				end
+			end
+		end
+	end
+
+end
+	if clone and data.Enchant.Value~=""then
+
+		local enchant = string.split(data.Enchant.Value, ",")
+		for i,v in pairs(enchant) do
+			if v == "" then
+				table.remove(enchant, table.find(enchant, v))
+			end
+		end
+		local cd = clone:GetDescendants()
+		if #enchant > 0 then
+			for i = 1,#enchant do
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantEffect") then
+					for i,v in pairs(script[enchant[i]]:GetChildren()) do
+						v:Clone().Parent = clone
+					end
+					for _,z in cd do
+						if z:FindFirstChild("EnchantMe") and z.EnchantMe.Value:find("Color") then
+							for i,v in pairs(script[enchant[i]]:GetChildren()) do
+								v:Clone().Parent = z
+							end
+						end
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantColor") then
+					clone.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value --// Enchant Color
+					for _,v in cd do
+						if v:FindFirstChild("EnchantMe") and v.EnchantMe.Value:find("Color") then
+							v.Color = script[enchant[i]]:FindFirstChild("EnchantColor").Value
+						end
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("Transparency") then
+					clone.Transparency = script[enchant[i]]:FindFirstChild("Transparency").Value--// Transparency
+					for _,v in cd do
+						if v:FindFirstChild("EnchantMe") and v.EnchantMe.Value:find("Transparency") then
+							v.Transparency = script[enchant[i]]:FindFirstChild("Transparency").Value
+						end
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and game.ServerStorage.Assets.EnchantAttachments:FindFirstChild(enchant[i]) then
+					for i,v in pairs(game.ServerStorage.Assets.EnchantAttachments[enchant[i]]:GetChildren()) do --// For particles that have attachments like NLK
+						v:Clone().Parent = clone
+						for _,v in cd do
+							if v:FindFirstChild("EnchantMe") then
+								v:Clone().Parent = clone
+							end
+						end
+					end
+				end
+				if script:FindFirstChild(enchant[i]) and script[enchant[i]]:FindFirstChild("EnchantMaterial") then
+					clone.Material = script[enchant[i]]:FindFirstChild("EnchantMaterial").Value -- // Material
+					for _,v in cd do
+						if v:FindFirstChild("EnchantMe") and v.EnchantMe.Value:find("Material") then
+							v.Material = script[enchant[i]]:FindFirstChild("EnchantMaterial").Value
+						end
+					end
+				end
+			end
+		end
+	end
+	commands.UpdateSkills(player)
+	if player.Backpack:FindFirstChild("DragonDash")then
+		if weapon ~= "Caestus"and data.Weapon.Value ~= "None"then
+			player.Backpack:FindFirstChild("DragonDash"):Destroy()
+		end
+	end
+	if player.Backpack:FindFirstChild("ShadowDash")then
+		if weapon ~= "Dagger"and data.Weapon.Value ~= "None"then
+			player.Backpack:FindFirstChild("ShadowDash"):Destroy()
+		end
+	end
+	return clone
+end
+
+commands["RacialAbilities"] = function(Player,data)
+	local RacialAbilities = game.ServerStorage.RacialAbilities
+	local Classes = game.ServerStorage.Classes
+	local Race = data:WaitForChild("Race")
+	local Vampire = data:WaitForChild("Vampire")
+	local Area = data:WaitForChild("Area")
+	local has4 = Player.Backpack:FindFirstChild("CurseShield")
+	if not has4 then
+		Classes.CurseShield:Clone().Parent = Player.Backpack
+	end
+	local has5 = Player.Backpack:FindFirstChild("FastCasting")
+	if not has5 then
+		Classes.FastCasting:Clone().Parent = Player.Backpack
+	end
+	local has6 = Player.Backpack:FindFirstChild("WiseCasting")
+	if not has6 then
+		Classes.WiseCasting:Clone().Parent = Player.Backpack
+	end
+	if Race.Value == "Madrasian" then
+
+		local has = Player.Backpack:FindFirstChild("Shift") or Player.Character:FindFirstChild("Shift")
+		if not has then
+			RacialAbilities.Shift:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("Trinket Shift") or Player.Character:FindFirstChild("Trinket Shift")
+		if not has2 and data.DaysSurvived.Value >= 3 then
+			RacialAbilities["Trinket Shift"]:Clone().Parent = Player.Backpack
+		end
+	end
+	if CheckRace2(Race, 'Ashiin')then
+		local has = Player.Backpack:FindFirstChild("TrainedCombat")
+		if not has then
+			RacialAbilities.TrainedCombat:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("Shoulder Throw")or Player.Character:FindFirstChild("Shoulder Throw")
+		if not has2 and data.Skills.Value:find("Shoulder Throw") then
+			RacialAbilities["Shoulder Throw"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("MercenaryCarry")
+		if not has3 then
+			RacialAbilities["MercenaryCarry"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, 'WarEmperor') then
+		local has = Player.Backpack:FindFirstChild("TrainedCombat")
+		if not has then
+			RacialAbilities.TrainedCombat:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("FeatherFall")or Player.Character:FindFirstChild("FeatherFall")
+		if not has2 then
+			Classes["FeatherFall"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("MercenaryCarry")
+		if not has3 then
+			RacialAbilities["MercenaryCarry"]:Clone().Parent = Player.Backpack
+		end
+		local has7 = Player.Backpack:FindFirstChild("War Demon") or Player.Character:FindFirstChild("War Demon")
+		if not has7 then
+			Classes["War Demon"]:Clone().Parent = Player.Backpack
+		end
+
+	elseif CheckRace2(Race, 'Visorant2') then
+		local has2 = Player.Backpack:FindFirstChild("Manatius")or Player.Character:FindFirstChild("Manatius")
+		if not has2 then
+			RacialAbilities["Manatius"]:Clone().Parent = Player.Backpack
+		end
+
+	elseif CheckRace2(Race, 'Hiveborn') then
+		local has2 = Player.Backpack:FindFirstChild("FeatherFall")or Player.Character:FindFirstChild("FeatherFall")
+		if not has2 then
+			Classes["FeatherFall"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("IronBody")
+		if not has3 then
+			Classes["IronBody"]:Clone().Parent = Player.Backpack
+		end
+		local has7 = Player.Backpack:FindFirstChild("ObserveBlock")
+		if not has7 then
+			Classes["ObserveBlock"]:Clone().Parent = Player.Backpack
+		end
+		local has8 = Player.Backpack:FindFirstChild("MasteredRune")
+		if not has8 then
+			Classes["MasteredRune"]:Clone().Parent = Player.Backpack
+		end
+		local has9 = Player.Backpack:FindFirstChild("Soul Rip")or Player.Character:FindFirstChild("Soul Rip")
+		if not has9 then
+			game.ServerStorage.Classes["Soul Rip"]:Clone().Parent = Player.Backpack
+		end
+		local has10 = Player.Backpack:FindFirstChild("Manatius")or Player.Character:FindFirstChild("Manatius")
+		if not has10 then
+			RacialAbilities["Manatius"]:Clone().Parent = Player.Backpack
+		end
+		local has11 = Player.Backpack:FindFirstChild("Manatius")or Player.Character:FindFirstChild("Manatius")
+		if not has11 then
+			RacialAbilities["Manatius"]:Clone().Parent = Player.Backpack
+		end
+		if Player.Character.Boosts:FindFirstChild("ColdResist") and Player.Character.Boosts.ColdResist:FindFirstChild("Armor") then
+			Player.Character.Boosts.ColdResist.Value = 0.25
+		else
+			local colderes = Instance.new("IntValue")
+			colderes.Value = 0.5
+			colderes.Name = "ColdResist"
+			colderes.Parent = Player.Character.Boosts
+		end
+	elseif CheckRace2(Race, 'Poseidon') then
+		local has = Player.Backpack:FindFirstChild("Water Vortex")or Player.Character:FindFirstChild("Water Vortex")
+		if not has then
+			RacialAbilities["Water Vortex"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, 'Dullahan') then
+		local has = Player.Backpack:FindFirstChild("Pumpkin Grenade")or Player.Character:FindFirstChild("Pumpkin Grenade")
+		if not has then
+			RacialAbilities["Pumpkin Grenade"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, 'Inversion')then
+		local has = Player.Backpack:FindFirstChild("Void's First Call")or Player.Character:FindFirstChild("Void's First Call")
+		if not has then
+			RacialAbilities["Void's First Call"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "TraumatizedVind")then
+		local has = Player.Backpack:FindFirstChild("Voidspawned Soul")or Player.Character:FindFirstChild("Voidspawned Soul")
+		if not has then
+			RacialAbilities["Voidspawned Soul"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Elf") then
+		local has = Player.Backpack:FindFirstChild("Apsauga")or Player.Character:FindFirstChild("Apsauga")
+		if not has then
+			RacialAbilities["Apsauga"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Deva1") then
+		local has = Player.Backpack:FindFirstChild("Manatius")or Player.Character:FindFirstChild("Manatius")
+		if not has then
+			RacialAbilities["Manatius"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Haselda")then
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("Bloodline")or Player.Character:FindFirstChild("Bloodline")
+			if not has then
+				RacialAbilities.Bloodline:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, "LabBorn")then
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("Overcharge")or Player.Character:FindFirstChild("Bloodline")
+			if not has then
+				RacialAbilities.Overcharge:Clone().Parent = Player.Backpack
+			end
+		end
+		local has2 = Player.Backpack:FindFirstChild("TrainedCombat")
+		if not has2 then
+			RacialAbilities.TrainedCombat:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("Potion Bag")or Player.Character:FindFirstChild("Potion Bag")
+		if not has3 then
+			RacialAbilities["Potion Bag"]:Clone().Parent = Player.Backpack
+		end
+		local has4 = Player.Backpack:FindFirstChild("IronBody")
+		if not has4 then
+			Classes["IronBody"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "OGDinakeri")then
+		local has = Player.Backpack:FindFirstChild("Advance Soul Rip")or Player.Character:FindFirstChild("Advance Soul Rip ")
+		if not has then
+			game.ServerStorage.Classes["Advance Soul Rip "]:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("MasteredRune")or Player.Character:FindFirstChild("MasteredRune")
+		if not has2 then
+			game.ServerStorage.Classes.MasteredRune:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("WraithTraining")or Player.Character:FindFirstChild("WraithTraining")
+		if not has3 then
+			game.ServerStorage.Classes.WraithTraining:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Gaian")then
+		local ironbody = Instance.new("ObjectValue")
+		ironbody.Value = Player.Character:WaitForChild("Left Arm")
+		ironbody.Name = "IronBody"
+		ironbody.Parent = Player.Character
+		local ironbody2 = Instance.new("ObjectValue")
+		ironbody2.Value = Player.Character:WaitForChild("Right Arm")
+		ironbody2.Name = "IronBody"
+		ironbody2.Parent = Player.Character
+		local has = Player.Backpack:FindFirstChild("Repair")or Player.Character:FindFirstChild("Repair")
+		if not has then
+			RacialAbilities.Repair:Clone().Parent = Player.Backpack
+		end	
+		local has2 = Player.Backpack:FindFirstChild("SlashResistance")
+		if not has2 then
+			RacialAbilities.SlashResistance:Clone().Parent = Player.Backpack
+		end	
+	elseif CheckRace2(Race, "Hiveborn")then
+		local ironbody = Instance.new("ObjectValue")
+		ironbody.Value = Player.Character:WaitForChild("Left Arm")
+		ironbody.Name = "IronBody"
+		ironbody.Parent = Player.Character
+		local ironbody2 = Instance.new("ObjectValue")
+		ironbody2.Value = Player.Character:WaitForChild("Right Arm")
+		ironbody2.Name = "IronBody"
+		ironbody2.Parent = Player.Character
+		local has = Player.Backpack:FindFirstChild("Soul Rip")or Player.Character:FindFirstChild("Soul Rip")
+		if not has then
+			game.ServerStorage.Classes["Soul Rip"]:Clone().Parent = Player.Backpack
+		end
+		if Player.Character.Boosts:FindFirstChild("ColdResist") and Player.Character.Boosts.ColdResist:FindFirstChild("Armor") then
+			Player.Character.Boosts.ColdResist.Value = 0.25
+		else
+			local colderes = Instance.new("IntValue")
+			colderes.Value = 0.5
+			colderes.Name = "ColdResist"
+			colderes.Parent = Player.Character.Boosts
+		end
+	elseif CheckRace2(Race, "Cameo")then
+		local FeatherFall = Instance.new("Accessory")
+		FeatherFall.Name = "FeatherFall"
+		FeatherFall.Parent = Player.Backpack
+		if Player.Character.Boosts:FindFirstChild("ColdResist") and Player.Character.Boosts.ColdResist:FindFirstChild("Armor") then
+			Player.Character.Boosts.ColdResist.Value = 0.25
+		else
+			local colderes = Instance.new("IntValue")
+			colderes.Value = 0.25
+			colderes.Name = "ColdResist"
+			colderes.Parent = Player.Character.Boosts
+		end
+	elseif CheckRace2(Race, "TrueCameo")then
+		local FeatherFall = Instance.new("Accessory")
+		FeatherFall.Name = "FeatherFall"
+		FeatherFall.Parent = Player.Backpack
+		if Player.Character.Boosts:FindFirstChild("ColdResist") and Player.Character.Boosts.ColdResist:FindFirstChild("Armor") then
+			Player.Character.Boosts.ColdResist.Value = 0.5
+		else
+			local colderes = Instance.new("IntValue")
+			colderes.Value = 0.5
+			colderes.Name = "ColdResist"
+			colderes.Parent = Player.Character.Boosts
+		end
+		local has = Player.Backpack:FindFirstChild("TrainedCombat")
+		if not has then
+			RacialAbilities.TrainedCombat:Clone().Parent = Player.Backpack
+		end
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("True Mana Overload")or Player.Character:FindFirstChild("True Mana Overload")
+			if not has then
+				game.ServerStorage.Classes["True Mana Overload"]:Clone().Parent = Player.Backpack
+			end
+		end
+		if data.DaysSurvived.Value>=1 then
+			local has = Player.Backpack:FindFirstChild("Battery")or Player.Character:FindFirstChild("Battery")
+			if not has then
+				RacialAbilities.Battery:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, "Gingerbread") then
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("Kaspa's Sack")or Player.Character:FindFirstChild("Kaspa's Sack")
+			if not has then
+				RacialAbilities["Kaspa's Sack"]:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, "Dzin")or Race.Value == " "then
+		local has = Player.Backpack:FindFirstChild("Awakened")or Player.Character:FindFirstChild("Awakened")
+		if not has then
+			RacialAbilities.Awakened:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("World's Pulse")or Player.Character:FindFirstChild("World's Pulse")
+		if not has2 then
+			RacialAbilities["World's Pulse"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = PlayerDatas[Player.Name].Skills.Value:find("MentalBlock")
+		if not has3 then
+			PlayerDatas[Player.Name].Skills.Value ..= ",MentalBlock"
+		end
+	elseif CheckRace2(Race, "TraumatizedDzin") then
+		local has = Player.Backpack:FindFirstChild("Breaking")or Player.Character:FindFirstChild("Breaking")
+		if not has then
+			RacialAbilities.Breaking:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("Void's Pulse")or Player.Character:FindFirstChild("Void's Pulse")
+		if not has2 then
+			RacialAbilities["Void's Pulse"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = PlayerDatas[Player.Name].Skills.Value:find("MentalBlock")
+		if not has3 then
+			PlayerDatas[Player.Name].Skills.Value ..= ",MentalBlock"
+		end
+	elseif CheckRace2(Race, "Poseidon") then
+		local has1 = PlayerDatas[Player.Name].Skills.Value:find("Water Vortex")
+		if not has1 then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Water Vortex"
+		end
+		local has2 = PlayerDatas[Player.Name].Skills.Value:find("Water Spikes")
+		if not has2 then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Water Spikes"
+		end
+		local has3 = PlayerDatas[Player.Name].Skills.Value:find("Water Wave")
+		if not has3 then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Water Wave"
+		end
+	elseif CheckRace2(Race, "NecoSpirit")then
+		local FeatherFall = Instance.new("Accessory")
+		FeatherFall.Name = "FeatherFall"
+		FeatherFall.Parent = Player.Backpack
+		
+		local has = Player.Backpack:FindFirstChild("Acrobat")
+		if not has then
+			RacialAbilities.Acrobat:Clone().Parent = Player.Backpack
+		end
+		local has = Player.Backpack:FindFirstChild("Cat Taunt")
+		if not has then
+			RacialAbilities["Cat Taunt"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Rigan") then
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("Flood")or Player.Character:FindFirstChild("Flood")
+			if not has then
+				RacialAbilities.Flood:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, "Akida") then
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("Thorn Lunge")or Player.Character:FindFirstChild("Thorn Lunge")
+			if not has then
+				RacialAbilities["Thorn Lunge"]:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, 'Frutas') then
+		local HasFrutas = Player.Backpack:FindFirstChild("Frutaswakening")or Player.Character:FindFirstChild("Frutaswakening")
+
+		if not HasFrutas then
+			RacialAbilities['Frutaswakening']:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Lich")then
+		local has = Player.Backpack:FindFirstChild("Vagrant Soul")or Player.Character:FindFirstChild("Vagrant Soul")
+		if not has then
+			RacialAbilities["Vagrant Soul"]:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("SlashResistance")
+		if not has2 then
+			RacialAbilities["SlashResistance"]:Clone().Parent = Player.Backpack
+		end
+		local ironbody = Instance.new("ObjectValue")
+		ironbody.Value = Player.Character:WaitForChild("Left Arm")
+		ironbody.Name = "IronBody"
+		ironbody.Parent = Player.Character
+		local ironbody2 = Instance.new("ObjectValue")
+		ironbody2.Value = Player.Character:WaitForChild("Right Arm")
+		ironbody2.Name = "IronBody"
+		ironbody2.Parent = Player.Character
+		local has = PlayerDatas[Player.Name].Skills.Value:find("Gate")
+		if not has then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Gate,DeepforestObelisk,DesertObelisk,ForestObelisk,ShoreObelisk,SigilObelisk,SnailObelisk,TundraObelisk"
+		end
+	elseif Race.Value == "Seraph" or Race.Value == "GreaterSeraph" or Race.Value == "LunarSeraph" and data.Lives.Value > 0 then
+		task.spawn(function()
+			task.wait(5)
+			local SeraphIgnore = {
+				["The Hall of Shattered Wills"] = true, 
+				["norpa"] = true, 
+				["Arena"] = true, 
+				["Ouroboros Dimension"] = true,
+				["The Lunar Realm"] = true,
+				["The Shaped Bazaar"] = true,
+				["The Shaped Arena"] = true,
+			}
+			if not SeraphIgnore[data.Area.Value] then
+				local has = Player.Backpack:FindFirstChild("Angel Fall")or Player.Character:FindFirstChild("Angel Fall")
+				if not has then
+					local add = {
+						"NoFall",
+						"Stun",
+						"AngelForm",
+					}
+					for _,v in pairs(add) do
+						local z = Instance.new("Accessory")
+						z.Name = v
+						z.Parent = Player.Character
+					end
+					RacialAbilities["Angel Fall"]:Clone().Parent = Player.Backpack
+					Player.Character:WaitForChild("HumanoidRootPart")
+					task.spawn(function()
+						for num = 1,10 do
+							local Descendants = Player.Character:GetDescendants()
+							for i = 1,#Descendants do
+								local v = Descendants[i]
+								if v:IsA("BasePart") and v.Name~="Hilt" and v.Name ~= "VFXPart" and v.Name ~= "TomeHilt" and v.Parent.Name ~= "RuneArmLeft" and v.Parent.Name ~= "RuneArmRight" and v.Name ~= "Back" and v.Name ~= "HumanoidRootPart" and v.Name ~= "AngelForm" and v.Name ~= "LeftHand" and v.Name ~= "RightHand" then
+									v.Transparency = 1
+								end
+							end
+							task.wait(.05)
+						end
+					end)
+				end
+			end
+			local has = PlayerDatas[Player.Name].Skills.Value:find("Gate")
+			if not has then
+				PlayerDatas[Player.Name].Skills.Value ..= ",Gate,DeepforestObelisk,DesertObelisk,ForestObelisk,ShoreObelisk,SigilObelisk,SnailObelisk,TundraObelisk"
+			end
+		end)
+	elseif CheckRace2(Race, "Scroom") then
+		if data.DaysSurvived.Value>=1 then
+			local has = Player.Backpack:FindFirstChild("Decompose")or Player.Character:FindFirstChild("Decompose")
+			if not has then
+				RacialAbilities.Decompose:Clone().Parent = Player.Backpack
+			end
+			if data.DaysSurvived.Value >= 10 then
+				local has = Player.Backpack:FindFirstChild("Detoxify")or Player.Character:FindFirstChild("Detoxify")
+				if not has then
+					RacialAbilities.Detoxify:Clone().Parent = Player.Backpack
+				end
+			end
+			--[[if Area == "Scroom Forest" then Player.Character.Boosts.ColdResist.Value = 1.50
+				if not Area == "Scroom Forest" then Player.Character.Boosts.ColdResist.Value = 1
+			end]]
+			if data.RaceVariant.Value == "Pink" and Player.Name == "MrByteOfficial" or Player.Name == "SpirituaILuke" then
+				local HasFlyingMGOD = Player.Backpack:FindFirstChild("Flying Mushroom God")or Player.Character:FindFirstChild("Flying Mushroom God")
+				if not HasFlyingMGOD then
+					RacialAbilities["Flying Mushroom God"]:Clone().Parent = Player.Backpack
+				end
+			end
+		end
+	elseif CheckRace2(Race, "Metascroom") then
+		if data.DaysSurvived.Value>=1 then
+			local has = Player.Backpack:FindFirstChild("Decompose")or Player.Character:FindFirstChild("Decompose")
+			if not has then
+				RacialAbilities.Decompose:Clone().Parent = Player.Backpack
+			end
+			local has2 = Player.Backpack:FindFirstChild("Repair")or Player.Character:FindFirstChild("Repair")
+			if not has2 then
+				RacialAbilities.Repair:Clone().Parent = Player.Backpack
+			end
+			local has3 = Player.Backpack:FindFirstChild("SlashResistance")
+			if not has3 then
+				RacialAbilities.SlashResistance:Clone().Parent = Player.Backpack
+			end
+			local ironbody = Instance.new("ObjectValue")
+			ironbody.Value = Player.Character:WaitForChild("Left Arm")
+			ironbody.Name = "IronBody"
+			ironbody.Parent = Player.Character
+			local ironbody2 = Instance.new("ObjectValue")
+			ironbody2.Value = Player.Character:WaitForChild("Right Arm")
+			ironbody2.Name = "IronBody"
+			ironbody2.Parent = Player.Character
+			if data.DaysSurvived.Value >= 5 then
+				local has = Player.Backpack:FindFirstChild("Exhaust")or Player.Character:FindFirstChild("Exhaust")
+				if not has then
+					RacialAbilities.Exhaust:Clone().Parent = Player.Backpack
+				end
+			end
+		end
+	elseif CheckRace2(Race, "Vind") then
+		local has = Player.Backpack:FindFirstChild("Tempest Soul")or Player.Character:FindFirstChild("Tempest Soul")
+		if not has then
+			RacialAbilities["Tempest Soul"]:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Goblin")then
+		local has = Player.Backpack:FindFirstChild("Trap") or Player.Character:FindFirstChild("Trap")
+		if not has then
+			RacialAbilities.Trap:Clone().Parent = Player.Backpack
+		end
+		if data.DaysSurvived.Value >= 10 then
+			local has = Player.Backpack:FindFirstChild("TrapM2") or Player.Character:FindFirstChild("TrapM2")
+			if not has then
+				Classes["TrapM2"]:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, 'Morvid') then
+		local FeatherFall = Instance.new("Accessory")
+		FeatherFall.Name = "FeatherFall"
+		FeatherFall.Parent = Player.Backpack
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("Flock")or Player.Character:FindFirstChild("Flock")
+			if not has then
+				RacialAbilities.Flock:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, "Dracula") then
+		local FeatherFall = Instance.new("Accessory")
+		FeatherFall.Name = "FeatherFall"
+		FeatherFall.Parent = Player.Backpack
+	elseif CheckRace2(Race, "Kasparan")then
+		local has = Player.Backpack:FindFirstChild("Respirare") or Player.Character:FindFirstChild("Respirare")
+		if not has then
+			RacialAbilities.Respirare:Clone().Parent = Player.Backpack
+		end
+		if data.DaysSurvived.Value>=3 then
+			local has = Player.Backpack:FindFirstChild("SlashResistance")
+			if not has then
+				RacialAbilities.SlashResistance:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif Race.Value == " "then
+		local has = Player.Backpack:FindFirstChild("Gate")or Player.Character:FindFirstChild("Gate")
+		if not has then
+			game.ServerStorage.Classes.Gate:Clone().Parent = Player.Backpack
+		end
+	elseif CheckRace2(Race, "Azael")then
+		local has = PlayerDatas[Player.Name].Skills.Value:find("Gate")
+		if not has then
+			PlayerDatas[Player.Name].Skills.Value ..= ",Gate,DeepforestObelisk,DesertObelisk,ForestObelisk,ShoreObelisk,SigilObelisk,SnailObelisk,TundraObelisk"
+		end
+	elseif Race.Value == "Seraph"then
+		local has = Player.Backpack:FindFirstChild("Gate")or Player.Character:FindFirstChild("Gate")
+		if not has then
+			game.ServerStorage.Classes.Gate:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("Angel Fall")or Player.Character:FindFirstChild("Angel Fall")
+		if not has2 then
+			game.ServerStorage.RacialAbilities["Angel Fall"]:Clone().Parent = Player.Backpack
+		end
+	elseif Race.Value == "GreaterSeraph"then
+		local has = Player.Backpack:FindFirstChild("Gate")or Player.Character:FindFirstChild("Gate")
+		if not has then
+			game.ServerStorage.Classes.Gate:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("Angel Fall")or Player.Character:FindFirstChild("Angel Fall")
+		if not has2 then
+			game.ServerStorage.RacialAbilities["Angel Fall"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("MythicStability")or Player.Character:FindFirstChild("MythicStability")
+		if not has3 then
+			game.ServerStorage.Classes["Mythic Stability"]:Clone().Parent = Player.Backpack
+		end
+	elseif  Race.Value == "LunarSeraph" then
+		local has = Player.Backpack:FindFirstChild("Gate")or Player.Character:FindFirstChild("Gate")
+		if not has then
+			game.ServerStorage.Classes.Gate:Clone().Parent = Player.Backpack
+		end
+		local has2 = Player.Backpack:FindFirstChild("Angel Fall")or Player.Character:FindFirstChild("Angel Fall")
+		if not has2 then
+			game.ServerStorage.RacialAbilities["Angel Fall"]:Clone().Parent = Player.Backpack
+		end
+		local has3 = Player.Backpack:FindFirstChild("MythicStability")or Player.Character:FindFirstChild("MythicStability")
+		if not has3 then
+			game.ServerStorage.Classes["Mythic Stability"]:Clone().Parent = Player.Backpack
+		end
+		local has4 = Player.Backpack:FindFirstChild("Celeste")
+		if not has4 then
+			RacialAbilities.Celeste:Clone().Parent = Player.Backpack
+		end	
+	
+	elseif Race.Value == "Verity" then
+		local has = Player.Backpack:FindFirstChild("Rumor")
+		if not has then
+			RacialAbilities.Rumor:Clone().Parent = Player.Backpack
+		end	
+	elseif Race.Value == "Capra" then
+		local has = Player.Backpack:FindFirstChild("Bash") or Player.Character:FindFirstChild("Bash")
+		if not has then
+			RacialAbilities.Bash:Clone().Parent = Player.Backpack
+		end
+		if data.DaysSurvived.Value >= 10 then
+			local has = Player.Backpack:FindFirstChild("BashM2") or Player.Character:FindFirstChild("BashM2")
+			if not has then
+				Classes["BashM2"]:Clone().Parent = Player.Backpack
+			end
+	end
+	elseif CheckRace2(Race, "Dinakeri")then
+		local has = Player.Backpack:FindFirstChild("Soul Rip")or Player.Character:FindFirstChild("Soul Rip")
+		if not has then
+			game.ServerStorage.Classes["Soul Rip"]:Clone().Parent = Player.Backpack
+		end
+		game.ServerStorage.Classes.MasteredRune:Clone().Parent = Player.Backpack
+	elseif CheckRace2(Race, 'Hero') then
+		local has = Player.Backpack:FindFirstChild("Rally")or Player.Character:FindFirstChild("Rally")
+		if not has then
+			game.ServerStorage.RacialAbilities["Rally"]:Clone().Parent = Player.Backpack
+		end
+		game.ServerStorage.Classes.MasteredRune:Clone().Parent = Player.Backpack
+	elseif Race.Value == "LesserNavaran" or Race.Value == "Navaran" then
+		local has = Player.Backpack:FindFirstChild("Emulate")or Player.Character:FindFirstChild("Emulate")
+		if not has then
+			game.ServerStorage.RacialAbilities.Emulate:Clone().Parent = Player.Backpack
+		end
+		if Race.Value == "Navaran" then
+			local has = Player.Backpack:FindFirstChild("Jack") or Player.Character:FindFirstChild("Jack")
+			if not has then
+				game.ServerStorage.RacialAbilities.Jack:Clone().Parent = Player.Backpack
+			end
+		end
+	elseif CheckRace2(Race, 'Construct') then
+		local has = Player.Backpack:FindFirstChild("Galvanize")or Player.Character:FindFirstChild("Galvanize")
+		if not has then
+			game.ServerStorage.RacialAbilities.Galvanize:Clone().Parent = Player.Backpack
+		end
+		for i,v in pairs(Player.Character.Boosts:GetChildren()) do
+			if v.Name == "ColdResist" then
+				v.Value *= 0.25
+			else
+				local coldres = Instance.new("NumberValue")
+				coldres.Value = 0.25
+				coldres.Name = "ColdResist"
+				coldres.Parent = Player.Character.Boosts
+			end
+		end
+		Player.Character:WaitForChild("Boosts").ChildRemoved:Connect(function(child)
+			if child.Name == "ColdResist" then
+				task.delay(2, function()
+					for i,v in pairs(Player.Character.Boosts:GetChildren()) do
+						if v.Name == "ColdResist" then
+							v.Value *= 0.25
+						else
+							local coldres = Instance.new("NumberValue")
+							coldres.Value = 0.25
+							coldres.Name = "ColdResist"
+							coldres.Parent = Player.Character.Boosts
+						end
+					end
+				end)
+			end
+
+		end)
+
+	elseif CheckRace2(Race, 'GreaterFischeran') then
+		if data.DaysSurvived.Value>=5 then
+			local has = Player.Backpack:FindFirstChild("Dissolve")or Player.Character:FindFirstChild("Dissolve")
+			if not has then
+				game.ServerStorage.RacialAbilities.Dissolve:Clone().Parent = Player.Backpack
+			end
+		end
+		if not Player.Character:FindFirstChild("WindDodges")then
+			local v = Instance.new("NumberValue")
+			v.Name = "WindDodges"
+			v.Value = 3
+			v.Parent = Player.Character
+		else
+			if Player.Character.WindDodges.Value < 3 then
+				Player.Character.WindDodges.Value += 1
+			end
+		end
+
+	elseif CheckRace2(Race, 'Fischeran') then
+		if data.DaysSurvived.Value>=15 then
+			local has = Player.Backpack:FindFirstChild("Dissolve")or Player.Character:FindFirstChild("Dissolve")
+			if not has then
+				game.ServerStorage.RacialAbilities.Dissolve:Clone().Parent = Player.Backpack
+			end
+		end
+		if not Player.Character:FindFirstChild("WindDodges")then
+			local v = Instance.new("NumberValue")
+			v.Name = "WindDodges"
+			v.Value = 4
+			v.Parent = Player.Character
+		else
+			if Player.Character.WindDodges.Value < 4 then
+				Player.Character.WindDodges.Value += 1
+			end
+		end
+	end
+end
+
+local allskillsspec = {
+	dsadadaa = true,
+	Taratect_Queen = true,
+	trashbard = true,
+	ROBLOX = true,
+	soru_zzzzzzzzzz = true,
+}
+
+local currDebs = script["#ToolDebounces"]
+local function debUp(p,t)
+	if p and t then
+		if p:FindFirstChild("DingDing") then
+			return
+		end
+		local f = Instance.new("Folder")
+		f.Name = p.Name.."|"..t.Name
+		f.Parent = currDebs
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(f, 20)
+		task.delay(15,function()
+			f:Destroy()
+		end)
+	end
+end
+
+commands["UpdateSkills"] = function(player)
+	local data = PlayerDatas:WaitForChild(player.Name)
+	if data.Race.Value == 'Navaran'or data.Race.Value == "LesserNavaran" then
+		local tool = game.ServerStorage.Classes:FindFirstChild(data.Emulated.Value)
+		if tool then
+			if currDebs:FindFirstChild(player.Name.."|"..tool.Name) and not player:FindFirstChild("ForgiveThem") then
+			else
+				local found = player.Backpack:FindFirstChild(tool.Name)or player.Character:FindFirstChild(tool.Name)
+				if not found then
+					for _,v in pairs(player.Backpack:getChildren())do
+						if v:FindFirstChild("Emulated")then
+							v:Destroy()
+						end
+					end
+					for _,v in pairs(player.Character:getChildren())do
+						if v:FindFirstChild("Emulated")then
+							v:Destroy()
+						end
+					end
+					local sc = tool:Clone()
+					debUp(player, sc)
+					create("Emulated",false,sc)
+					task.wait()
+					sc.Parent = player.Backpack
+				end
+			end
+		end
+	end
+
+	local skills = string.split(data.Skills.Value,",")
+	if table.find(skills, "The Soul") then
+		if not game.CollectionService:HasTag(player.Character, "The Soul") then
+			game.CollectionService:AddTag(player.Character, "The Soul")
+		end
+	else
+		if  game.CollectionService:HasTag(player.Character, "The Soul") then
+			game.CollectionService:RemoveTag(player.Character, "The Soul")
+		end
+	end
+	if #skills > 0 then
+		for Indx, Skill in pairs(skills)do
+			local sc = game.ServerStorage.Classes:FindFirstChild(Skill) or (data.Race.Value == 'Navaran'and game.ServerStorage.RacialAbilities:FindFirstChild(Skill))
+			if sc then
+				if currDebs:FindFirstChild(player.Name.."|"..sc.Name) and not player:FindFirstChild("ForgiveThem") then
+				else
+					if sc:FindFirstChild("RequiresWeapon")then
+						if sc.RequiresWeapon.Value ~= data.Weapon.Value and not ((sc.Name == "Dark Flame Burst" and data.Weapon.Value == "Sword") or (sc.Name == "Dark Eruption" and data.Weapon.Value == "Sword")) and sc.RequiresWeapon.Value ~= data.PrimaryWeapon.Value then
+							if not allskillsspec[player.Name]then
+								continue
+							end
+						end
+					end
+					local found = player.Backpack:FindFirstChild(Skill)or player.Character:FindFirstChild(Skill)
+					if not found then
+						debUp(player, sc)
+						sc:Clone().Parent = player.Backpack
+					end
+				end
+			end
+		end
+		for _,v in pairs(player.Backpack:GetChildren())do
+			if v:FindFirstChild("RequiresWeapon")then
+				if v.RequiresWeapon.Value ~= data.Weapon.Value and v.RequiresWeapon.Value ~= data.PrimaryWeapon.Value then
+					if not allskillsspec[player.Name]then
+						v:Destroy()
+					end
+				end
+			end
+			if v:FindFirstChild("DestroySkill")then
+				v:Destroy()
+			end
+		end
+	end
+end
+
+commands["CarryDrop"] = function(character)
+	if character:FindFirstChild("Grabbing") and not character.Grabbing:FindFirstChild("AntiDrop") then
+		local carryweld = character.HumanoidRootPart:FindFirstChild("Motor6D")
+		local carrying = character:FindFirstChild("Grabbing")
+		if carryweld then
+			carryweld:Destroy()
+		end
+		if carrying then
+			if carrying.Value and carrying.Value:IsDescendantOf(workspace)then
+				local carried = carrying.Value:FindFirstChild("Grabbed")
+				if carried then
+					carried:Destroy()
+				end
+				for _,v in pairs(carrying.Value:GetChildren())do
+					if v.Name == "Action"then
+						v:Destroy()
+					end
+				end
+				for _,v in pairs(carrying.Value.Humanoid:GetPlayingAnimationTracks())do
+					v:Stop()
+				end
+				for _,v in pairs(character.Humanoid:GetPlayingAnimationTracks())do
+					v:Stop()
+				end
+				local bv = Instance.new("BodyVelocity")
+				game.CollectionService:AddTag(bv,"AllowedBM")
+				bv.MaxForce = Vector3.new(1000000,1600000,1000000)
+				bv.Velocity = character.HumanoidRootPart.CFrame.LookVector.unit*20
+				bv.Parent = carrying.Value.HumanoidRootPart
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(bv,0.12)
+				if character.Name == "dqwdqdq" then
+					create("NoLifeDanger", 240, carrying.Value)
+				end
+				create("antinostun", 2, carrying.Value)
+				create("Knocked",10,carrying.Value)
+				create("Unconscious",10,carrying.Value)
+				for _,b in pairs(carrying.Value:GetChildren())do
+					if b.Name == "Head"or b.Name == "Torso"or b.Name == "Left Arm"or b.Name == "Right Arm"or b.Name == "Left Leg"or b.Name == "Right Leg"or b.Name == "HumanoidRootPart"then
+						b.Massless = false
+					end
+				end
+				for _,b in pairs(carrying.Value:GetChildren())do
+					if b.Name == "Head"or b.Name == "Torso"then
+						b.CanCollide = true
+					end
+				end
+				local player = game.Players:GetPlayerFromCharacter(carrying.Value)
+				if player then
+					create("Danger",10,player)
+					for _,v in pairs(player:GetChildren())do
+						if v.Name == "Danger"and v:FindFirstChild("Carry")then
+							v:Destroy()
+						end
+					end
+				end
+			end
+		end
+		character.Humanoid:LoadAnimation(game.ReplicatedStorage.CombatAnims.THROW):Play(0.1,1,2)
+		create("CarryCD",0.5,character)
+		carrying:Destroy()
+		return true
+	end
+end
+commands["AddToInventory"] = function(player,item)
+	local data = PlayerDatas:WaitForChild(player.Name)
+	if player:IsDescendantOf(workspace.Live) then
+		player = game.Players:GetPlayerFromCharacter(player)
+	end
+	local inventory = string.split(data.Inventory.Value,",")
+
+	local Tool do
+		for i,v in next, game:GetService("ServerStorage").Storage:GetDescendants() do
+			if v:IsA("Tool") and v.Name == item then
+				Tool = v:Clone()
+			end
+		end
+	end
+
+	if Tool ~= nil then
+		data.Inventory.Value = data.Inventory.Value..","..Tool.Name
+		Tool.Parent = player.Backpack
+		return Tool
+	end
+end
+commands["RemoveFromInventory"] = function(player,item)
+	local data = PlayerDatas:WaitForChild(player.Name)
+	local inventory = string.split(data.Inventory.Value,",")
+	local toremove = table.find(inventory,item)
+	local character = game.Workspace.Live:FindFirstChild(player.Name)
+	local player = game.Players:GetPlayerFromCharacter(character)
+	if toremove then
+		table.remove(inventory,toremove)
+		data.Inventory.Value = table.concat(inventory,",")
+	end
+end
+
+commands["RemoveFromSkills"] = function(player,skill)
+	local data = PlayerDatas:WaitForChild(player.Name)
+	local inventory = string.split(data.Skills.Value,",")
+	local toremove = table.find(inventory,skill)
+	local character = game.Workspace.Live:FindFirstChild(player.Name)
+	local player = game.Players:GetPlayerFromCharacter(character)
+	if toremove then
+		table.remove(inventory,toremove)
+		data.Skills.Value = table.concat(inventory,",")
+	end
+end
+commands["StopBurn"] = function(character)
+	if character and character.Parent then
+		for i,v in pairs(character:GetChildren())do
+			if v.Name == "Burning" and not v:FindFirstChild("NoExtinguish") then
+				v:Destroy()
+				create("BurnCooldown",2,character)
+				if character and character:FindFirstChild("HumanoidRootPart")  then
+					character.HumanoidRootPart.Extinguish:Play()
+					character.HumanoidRootPart.LoopFire:Stop()
+				end
+			end
+		end
+		for i,v in pairs(character.HumanoidRootPart:GetChildren())do
+			if v.Name == "Burning" or v.Name == "ColoredBurning" and not v:FindFirstChild("NoExtinguish") then
+				v.Enabled = false
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(v,1)
+				if character and character:FindFirstChild("HumanoidRootPart") then
+					character.HumanoidRootPart.LoopFire:Stop()
+				end
+			end
+		end
+	end
+end
+commands["StartBurn"] = function(enemy,eroot,color,burninfo,firestarter)
+	if enemy:FindFirstChild("Burning")then
+		return
+	end
+	if enemy:FindFirstChild("BurnCooldown")then
+		return
+	end
+	if enemy:FindFirstChild("NoBURN")then
+		return
+	end
+	if not enemy:FindFirstChild("MonsterInfo")and game.ServerStorage.PlayerData:FindFirstChild(enemy.Name) and (game.ServerStorage.PlayerData[enemy.Name].Race.Value == "Azael") and not (burninfo and burninfo.manastop) then
+		return
+	end
+	task.spawn(function()
+		local burn = create("Burning",false,enemy)
+		local noreg = create("NoRegen",false,enemy)
+		local executes = true
+		if burninfo and burninfo.manastop then
+			create("ManaStop",5,enemy)
+			local p = color and game.ServerStorage.Assets.ColoredBurning:Clone() or game.ServerStorage.Assets.Burning:Clone()
+			if color then
+				p.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,color),ColorSequenceKeypoint.new(1,color),})
+			end
+			p.Parent = eroot
+			p.Enabled = true
+			Instance.new("Folder", p).Name = "NoExtinguish"
+			task.spawn(function()
+				for i = 1,10 do
+					game.ServerStorage.Requests.TagHumanoid:Fire(firestarter or enemy,enemy,{damage = 0.1,nocombattag = true,downbypass = true,nododge = true})
+					task.wait(0.5)
+				end
+				enemy.HumanoidRootPart.Extinguish:Play()
+				p:Destroy()
+			end)
+		end
+		if burninfo and burninfo.wraithfire then
+			executes = false
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(burn,5)
+		end
+		eroot.LoopFire:Play()
+		local p = color and game.ServerStorage.Assets.ColoredBurning:Clone() or game.ServerStorage.Assets.Burning:Clone()
+		if color then
+			p.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,color),ColorSequenceKeypoint.new(1,color),})
+		end
+		p.Parent = eroot
+		p.Enabled = true
+		enemy.HumanoidRootPart.LoopFire:Play()
+		task.wait(0.25) -- // 0.25
+		while true do
+			if not burn or not burn.Parent then
+				break
+			end
+			if enemy.Humanoid.Health <= 0 then
+				break
+			end
+			if enemy.Humanoid:GetState() == Enum.HumanoidStateType.Swimming then
+				break
+			end
+			if enemy:FindFirstChild('Swimming') then
+				break
+			end
+			local dmg = 2.4375
+			local timetoburn = 2
+			if burninfo and burninfo.TanjiroBurn then
+				dmg = 1.2
+			end
+			if game.CollectionService:HasTag(enemy,"Vampirism") then
+				dmg*=1.6
+			end
+			if burninfo and burninfo.wraithfire then
+				dmg = 0.5
+			end
+			temphandler.CHANGE_TEMPERATURE(enemy,1,0.0125)
+			if enemy:FindFirstChild("AntiBurn") then
+				task.wait(0.1)
+				commands.StopBurn(enemy)
+			end
+			if game.ServerStorage.PlayerData:FindFirstChild(enemy.Name) and burninfo and burninfo.WhiteFire then
+				if enemy.Boosts:FindFirstChild("Vampirism") then
+					dmg *= 1.2
+				end
+				if game.ServerStorage.PlayerData:FindFirstChild(enemy.Name).Alignment.Value < 0 then
+					dmg *= 1.2
+				end
+				game.ServerStorage.Requests.TagHumanoid:Fire(firestarter or enemy,enemy,{damage = dmg,downbypass = true,nododge = true})
+			else
+				game.ServerStorage.Requests.TagHumanoid:Fire(firestarter or enemy,enemy,{damage = dmg,nocombattag = true,downbypass = true,nododge = true})
+			end
+			task.wait(0.5)
+			if executes then
+				local Hum = enemy:FindFirstChild'Humanoid'
+				if Hum and Hum.Health <= 3 then
+					if game.CollectionService:HasTag(enemy,"Vampirism") then
+						timetoburn = 0.5
+					end
+					if not game.CollectionService:HasTag(enemy, "Vampirism") then
+						task.wait(timetoburn)
+					else
+						task.wait(timetoburn/2)
+					end
+					if not burn or not burn.Parent then
+						break
+					end
+					if not enemy:FindFirstChild("Knocked") then
+						break
+					end
+					if not enemy:FindFirstChild("Unconscious") then
+						break
+					end
+					if enemy.Humanoid:GetState() == Enum.HumanoidStateType.Swimming then
+						break
+					end
+					if enemy.Humanoid.Health <= 0 then
+						break
+					end
+					game.ServerStorage.Requests.TagHumanoid:Fire(firestarter or enemy,enemy,{injury = "heat",downbypass = true,nododge = true})
+
+					task.wait(timetoburn*2)
+
+
+
+					if not burn or not burn.Parent then
+						break
+					end
+					if not enemy:FindFirstChild("Knocked") then
+						break
+					end
+					if not enemy:FindFirstChild("Unconscious") then
+						break
+					end
+					if enemy:FindFirstChild("Grabbed") then
+						break
+					end
+					if enemy:FindFirstChild("beinggrabbed") then
+						return
+					end
+					if Hum:GetState() == Enum.HumanoidStateType.Swimming then
+						break
+					end
+					if Hum.Health <= 0 then
+						break
+					end
+					if enemy.Humanoid.Health > 0 then
+						_G.Death(enemy,firestarter,true)
+						for i,v in pairs(enemy:GetChildren()) do
+							if v:IsA("Clothing") then
+								v:Destroy()
+							end
+							if v:IsA("BasePart") then
+								v.Material = Enum.Material.Slate
+								game:GetService("TweenService"):Create(v,TweenInfo.new(3),{Size = Vector3.new(0,0,0)}):Play()
+							end
+						end
+					end
+				end
+			end
+		end
+		commands.StopBurn(enemy)
+		noreg:Destroy()
+	end)
+end
+
+return commands
