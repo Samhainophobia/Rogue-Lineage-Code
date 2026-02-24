@@ -1864,14 +1864,20 @@ table.insert(Connections,
 						return
 					end
 				end
-				local Charge = Instance.new("Accessory")
-				Charge.Name = "Charge"
-				Charge.Parent = Character
+
+				-- [[ THE FIX: Only create the tag if it doesn't already exist! ]]
+				if not Character:FindFirstChild("Charge") then
+					local Charge = Instance.new("Accessory")
+					Charge.Name = "Charge"
+					Charge.Parent = Character
+				end
 			end
 		else
-			local Charge = FindFirstChild(Character,"Charge")
-			if Charge then
-				Charge:Destroy()
+			-- [[ THE FIX: Destroys ALL ghost charge tags cleanly ]]
+			for _, v in pairs(Character:GetChildren()) do
+				if v.Name == "Charge" then
+					v:Destroy()
+				end
 			end
 		end
 	end)
@@ -2174,7 +2180,7 @@ table.insert(Connections,
 		-- [[ END NEW ]]
 
 		for i,v in pairs(Boosts:GetChildren()) do
-			if v.Name == "FallResist" and v:IsA("IntValue") then
+			if v.Name == "FallResist" and (v:IsA("IntValue") or v:IsA("NumberValue")) then
 				FallDamageReduction -= v.Value
 			end
 		end
@@ -4532,9 +4538,13 @@ table.insert(Connections,
 			return
 		end
 		if a then
-			local sprint = Instance.new("Accessory")
-			sprint.Name = "Sprinting"
-			sprint.Parent = Character
+			-- [[ THE FIX: Only spawn it if you don't already have it! ]]
+			if not Character:FindFirstChild("Sprinting") then
+				local sprint = Instance.new("Accessory")
+				sprint.Name = "Sprinting"
+				sprint.Parent = Character
+			end
+
 			local children = GetChildren(Character)
 			for i = 1,#children do
 				local v = children[i]
@@ -4561,9 +4571,11 @@ table.insert(Connections,
 				end
 			end)
 		else
-			local sprint = Character:FindFirstChild("Sprinting")
-			if sprint then
-				sprint:Destroy()
+			-- [[ THE FIX: Destroy ALL ghost sprinting tags just in case! ]]
+			for _, v in pairs(Character:GetChildren()) do
+				if v.Name == "Sprinting" then
+					v:Destroy()
+				end
 			end
 		end
 	end)
@@ -4876,15 +4888,48 @@ table.insert(Connections,
 			game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)			
 			return
 		end
-		local FindFirstChild = game.FindFirstChild
-		local GetChildren = game.GetChildren
-		local Shadow = game.ServerStorage.Requests:WaitForChild("Shadow")
+
 		local msgtable = Message:split(" ")
-		if msgtable[1]:find("/e")then
+		local cmd = string.lower(msgtable[1])
+
+		-- [[ THE FIXED REVEAL COMMAND (Moved OUTSIDE the /e block!) ]]
+		if cmd == "/reveal" or cmd == "!reveal" then
+			local myRevealed = Player:FindFirstChild("RevealedTo")
+			if myRevealed and Character and Character:FindFirstChild("HumanoidRootPart") then
+				local revealedCount = 0
+
+				-- Find everyone within 25 studs
+				for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+					if otherPlayer ~= Player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+						local distance = (Character.HumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).Magnitude
+
+						if distance <= 25 then
+							-- Add a comma to the end so we can search for exact names!
+							local searchName = otherPlayer.Name .. ","
+							if not string.find(myRevealed.Value, searchName) then
+								myRevealed.Value = myRevealed.Value .. searchName
+								revealedCount = revealedCount + 1
+							end
+						end
+					end
+				end
+
+				if revealedCount > 0 then
+					print("[SYSTEM] " .. Player.Name .. " successfully revealed their name to " .. revealedCount .. " player(s)!")
+				else
+					print("[SYSTEM] No new players were close enough to reveal to.")
+				end
+			end
+			return
+		end
+		-- [[ END REVEAL ]]
+
+		-- [[ THE ORIGINAL EMOTES / COMMANDS BLOCK ]]
+		if msgtable[1]:find("/e") then
 			if string.lower(msgtable[2])=="lowspec" then
 				game.ReplicatedStorage.Requests.LowGFX:FireClient(Player)
 			end
-			if string.lower(msgtable[2])=="vanity"then
+			if string.lower(msgtable[2])=="vanity" then
 				local data = game.ServerStorage.PlayerData[Player.Name]
 				if Player.Character and PlayerData.VanityOff.Value == true and (game:GetService("MarketplaceService"):UserOwnsGamePassAsync(Player.UserId,0765632231) or (data:FindFirstChild("Rank") and data.Rank.Value > 0 and data.Rank.Value <= 5) or (_G.GetAdminLevel(Player.UserId) > 0 ) or PlayerData.LastName.Value == 'Joge') or (Player.Name == "astrookrispp") then
 					PlayerData.VanityOff.Value = false
@@ -4945,15 +4990,120 @@ table.insert(Connections,
 			end
 
 			-- [[ 2. SERAPH BESTOW HALO COMMAND ]]
-			if string.lower(msgtable[2])=="bestow" and msgtable[3] then
+			if string.lower(msgtable[2])=="bestow" then
 				local race = PlayerData.Race.Value
 				if race == "Seraph" or race == "GreaterSeraph" or race == "LunarSeraph" then
+					if Player:FindFirstChild("BestowingActive") then return end -- Prevent spamming
+
+					-- [[ RECALL LOGIC: STRIP THE HALO FROM THE TARGET ]]
+					if Player:FindFirstChild("BestowedTarget") then
+						local bestowActive = Instance.new("BoolValue")
+						bestowActive.Name = "BestowingActive"
+						bestowActive.Parent = Player
+						game:GetService("Debris"):AddItem(bestowActive, 4) 
+
+						local oldTarget = Player.BestowedTarget.Value
+
+						if oldTarget and oldTarget:FindFirstChild("HumanoidRootPart") then
+							local targetHum = oldTarget:FindFirstChild("Humanoid")
+
+							-- Rip the halo off: Damage and Ragdoll
+							if targetHum then targetHum:TakeDamage(25) end
+							local knocked = Instance.new("Accessory")
+							knocked.Name = "Knocked"
+							knocked.Parent = oldTarget
+							game:GetService("Debris"):AddItem(knocked, 4)
+
+							-- Play Lift-off Sound on Target
+							local ripSound = Instance.new("Sound")
+							ripSound.SoundId = "rbxassetid://110983945171856"
+							ripSound.Volume = 2
+							ripSound.Parent = oldTarget.HumanoidRootPart
+							ripSound:Play()
+							game:GetService("Debris"):AddItem(ripSound, 3)
+
+							-- [[ BULLETPROOF STAT CLEANUP ]]
+							if oldTarget:FindFirstChild("SeraphBlessing") then
+								oldTarget.SeraphBlessing:Destroy()
+							end
+							-- Hunt down the exact stats we gave them in the Boosts folder and destroy them
+							if oldTarget:FindFirstChild("Boosts") then
+								for _, v in pairs(oldTarget.Boosts:GetChildren()) do
+									if v:FindFirstChild("FromSeraph") then
+										v:Destroy()
+									end
+								end
+							end
+
+							-- Animate the return flight to the Seraph
+							task.spawn(function()
+								local ts = game:GetService("TweenService")
+								local HaloUnion = game.ServerStorage.Assets:FindFirstChild("SeraphHalo")
+								if HaloUnion then
+									local travelHalo = HaloUnion:Clone()
+									travelHalo.Name = "TravelHalo"
+									travelHalo.CanCollide = false
+									travelHalo.Anchored = true
+									travelHalo.Massless = true
+									travelHalo.Color = Color3.fromRGB(PlayerData.ManaColor.Value.r, PlayerData.ManaColor.Value.g, PlayerData.ManaColor.Value.b)
+									travelHalo.Material = Enum.Material.Neon
+									if travelHalo:FindFirstChildWhichIsA("Script") then travelHalo:FindFirstChildWhichIsA("Script"):Destroy() end
+
+									travelHalo.CFrame = oldTarget.HumanoidRootPart.CFrame * CFrame.new(0, 2, 0)
+									travelHalo.Parent = workspace.Thrown
+
+									-- Flying Return Sound
+									local flySound = Instance.new("Sound")
+									flySound.SoundId = "rbxassetid://138158731526545"
+									flySound.Looped = true
+									flySound.Volume = 1.5
+									flySound.Parent = travelHalo
+									flySound:Play()
+
+									local elapsed = 0
+									local duration = 0.6 -- Fast return
+									local startPos = travelHalo.CFrame
+
+									while elapsed < duration do
+										if not Character or not Character:FindFirstChild("Head") then break end
+										elapsed = elapsed + task.wait()
+										local alpha = math.clamp(elapsed / duration, 0, 1)
+										travelHalo.CFrame = startPos:Lerp(Character.Head.CFrame * CFrame.new(0, 0.8, 0), alpha) * CFrame.Angles(0, elapsed * 20, 0)
+									end
+									travelHalo:Destroy()
+
+									-- Unhide the Seraph's Halo
+									if Character:FindFirstChild("BestowedAway") then
+										Character.BestowedAway:Destroy()
+									end
+								end
+							end)
+						else
+							-- If the target logged or died, just give the Seraph their halo back
+							if Character:FindFirstChild("BestowedAway") then Character.BestowedAway:Destroy() end
+						end
+
+						Player.BestowedTarget:Destroy()
+						return
+					end
+
+					-- [[ BESTOW LOGIC: ASCENSION SEQUENCE ]]
+					if not msgtable[3] then return end
 					local targetName = string.lower(msgtable[3])
 					local targetPlayer = nil
 
-					-- Find the target player
+					-- Find the target player by Roblox Name, Display Name, OR In-Game First Name!
 					for _, p in pairs(game.Players:GetPlayers()) do
-						if string.lower(string.sub(p.Name, 1, #targetName)) == targetName then
+						local rbxName = string.lower(p.Name)
+						local dispName = string.lower(p.DisplayName)
+						local inGameName = ""
+						if p:FindFirstChild("leaderstats") and p.leaderstats:FindFirstChild("FirstName") then
+							inGameName = string.lower(p.leaderstats.FirstName.Value)
+						end
+
+						if string.sub(rbxName, 1, #targetName) == targetName or 
+							string.sub(dispName, 1, #targetName) == targetName or 
+							string.sub(inGameName, 1, #targetName) == targetName then
 							targetPlayer = p
 							break
 						end
@@ -4961,70 +5111,205 @@ table.insert(Connections,
 
 					if targetPlayer and targetPlayer ~= Player and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
 						local dist = (Character.HumanoidRootPart.Position - targetPlayer.Character.HumanoidRootPart.Position).Magnitude
-						if dist <= 15 then -- Must be close to the player
+						if dist <= 100 then 
 
-							-- Clean up old bestow if they already gave it to someone else
-							if Player:FindFirstChild("BestowedTarget") then
-								local oldTarget = Player.BestowedTarget.Value
-								if oldTarget and oldTarget:FindFirstChild("SeraphBlessing") then
-									oldTarget.SeraphBlessing:Destroy()
-								end
-								Player.BestowedTarget:Destroy()
-							end
+							local bestowActive = Instance.new("BoolValue")
+							bestowActive.Name = "BestowingActive"
+							bestowActive.Parent = Player
+							game:GetService("Debris"):AddItem(bestowActive, 15) 
 
-							-- Tag target so the server remembers who has the halo
-							local targetTracker = Instance.new("ObjectValue")
-							targetTracker.Name = "BestowedTarget"
-							targetTracker.Value = targetPlayer.Character
-							targetTracker.Parent = Player
+							-- Tag the Seraph to hide their own halo
+							local bAway = Instance.new("BoolValue")
+							bAway.Name = "BestowedAway"
+							bAway.Parent = Character
 
-							-- We group the buffs in one folder so we can delete them all at once later
-							local blessingFolder = Instance.new("Folder")
-							blessingFolder.Name = "SeraphBlessing"
-							blessingFolder.Parent = targetPlayer.Character
+							-- [[ THE ASCENSION ANIMATION SEQUENCE ]]
+							task.spawn(function()
+								local ts = game:GetService("TweenService")
+								local HaloUnion = game.ServerStorage.Assets:FindFirstChild("SeraphHalo")
+								local startColor = Color3.fromRGB(PlayerData.ManaColor.Value.r, PlayerData.ManaColor.Value.g, PlayerData.ManaColor.Value.b)
 
-							-- Walkspeed +2
-							local spd = Instance.new("NumberValue")
-							spd.Name = "SpeedBoost"
-							spd.Value = 2
-							spd.Parent = targetPlayer.Character:FindFirstChild("Boosts") or blessingFolder
+								if HaloUnion then
+									-- 1. Create the visual "traveling" halo
+									local travelHalo = HaloUnion:Clone()
+									travelHalo.Name = "TravelHalo"
+									travelHalo.CanCollide = false
+									travelHalo.Anchored = true
+									travelHalo.Massless = true
+									travelHalo.Color = startColor
+									travelHalo.Material = Enum.Material.Neon
+									if travelHalo:FindFirstChildWhichIsA("Script") then travelHalo:FindFirstChildWhichIsA("Script"):Destroy() end
 
-							-- Health +10 (Rogue uses percentages, so this calculates exactly 10 flat HP)
-							local hp = Instance.new("NumberValue")
-							hp.Name = "HealthBoost"
-							hp.Value = 10 / targetPlayer.Character.Humanoid.MaxHealth 
-							hp.Parent = targetPlayer.Character:FindFirstChild("Boosts") or blessingFolder
+									local startCFrame = Character.Head.CFrame * CFrame.new(0, 1, 0)
+									travelHalo.CFrame = startCFrame
+									travelHalo.Parent = workspace.Thrown
 
-							-- Give them the Halo!
-							local HaloUnion = game.ServerStorage.Assets:FindFirstChild("SeraphHalo")
-							if HaloUnion then
-								local clone = HaloUnion:Clone()
-								clone.Name = "SeraphHalo"
-								clone.CanCollide = false
-								clone.Anchored = false
-								clone.Massless = true
-								clone.Parent = targetPlayer.Character:WaitForChild("Head")
+									-- Lift off Sound (Skyward)
+									local liftSound = Instance.new("Sound")
+									liftSound.SoundId = "rbxassetid://110983945171856"
+									liftSound.Volume = 2
+									liftSound.Parent = Character.HumanoidRootPart
+									liftSound:Play()
+									game:GetService("Debris"):AddItem(liftSound, 3)
 
-								local weld = Instance.new("Weld")
-								weld.Part0 = targetPlayer.Character.Head
-								weld.Part1 = clone
-								weld.C0 = CFrame.new(0, 0.8, 0)
-								weld.Parent = clone
+									-- Flying Target Sound
+									local flySound = Instance.new("Sound")
+									flySound.SoundId = "rbxassetid://138158731526545"
+									flySound.Looped = true
+									flySound.Volume = 1.5
+									flySound.Parent = travelHalo
+									flySound:Play()
 
-								clone.Color = Color3.fromRGB(PlayerData.ManaColor.Value.r, PlayerData.ManaColor.Value.g, PlayerData.ManaColor.Value.b)
-								clone.Material = Enum.Material.Neon
+									-- [[ PHASE 1: FLOAT HIGH INTO THE AIR ]]
+									local upPos = startCFrame * CFrame.new(0, 20, 0)
+									local upTween = ts:Create(travelHalo, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame = upPos * CFrame.Angles(0, math.rad(360), 0)})
+									upTween:Play()
+									upTween.Completed:Wait()
 
-								-- This ensures the stats and halo are removed when the blessingFolder is destroyed
-								local destroyCon
-								destroyCon = blessingFolder.AncestryChanged:Connect(function()
-									if not blessingFolder:IsDescendantOf(game) then
-										if spd then spd:Destroy() end
-										if hp then hp:Destroy() end
-										if clone then clone:Destroy() end
-										destroyCon:Disconnect()
+									task.wait(0.2) 
+
+									-- [[ PHASE 2: CRASH DOWN INTO THE PLAYER ]]
+									if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+										travelHalo:Destroy()
+										if Character:FindFirstChild("BestowedAway") then Character.BestowedAway:Destroy() end
+										if bestowActive then bestowActive:Destroy() end
+										return
 									end
-								end)
-							end
+
+									local elapsed = 0
+									local duration = 0.4
+									local peakPos = travelHalo.CFrame
+
+									while elapsed < duration do
+										if not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("Torso") then break end
+										elapsed = elapsed + task.wait()
+										local alpha = math.clamp(elapsed / duration, 0, 1)
+										local crashAlpha = alpha ^ 2 
+										travelHalo.CFrame = peakPos:Lerp(targetPlayer.Character.Torso.CFrame, crashAlpha) * CFrame.Angles(0, elapsed * 40, 0)
+									end
+									travelHalo:Destroy()
+
+									-- [[ PHASE 3: IMPACT, DAMAGE, AND RAGDOLL ]]
+									if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+										local targetChar = targetPlayer.Character
+										local targetHum = targetChar:FindFirstChild("Humanoid")
+
+										if targetHum then
+											targetHum:TakeDamage(15) 
+
+											local knocked = Instance.new("Accessory")
+											knocked.Name = "Knocked"
+											knocked.Parent = targetChar
+											game:GetService("Debris"):AddItem(knocked, 6) 
+
+											-- Pulse Sound Loop
+											local pulseSound = Instance.new("Sound")
+											pulseSound.SoundId = "rbxassetid://101794096163897"
+											pulseSound.Looped = true
+											pulseSound.Volume = 2
+											pulseSound.Parent = targetChar.HumanoidRootPart
+											pulseSound:Play()
+
+											-- Blinding White Pulse Visual
+											local hl = Instance.new("Highlight")
+											hl.Name = "AscensionPulse"
+											hl.FillColor = Color3.fromRGB(255, 255, 255)
+											hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+											hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
+											hl.FillTransparency = 0
+											hl.OutlineTransparency = 0
+											hl.Parent = targetChar
+
+											local pulseEnd = tick() + 6
+											task.spawn(function()
+												while tick() < pulseEnd and hl and hl.Parent do
+													local wave = (math.sin(tick() * 8) + 1) / 2
+													hl.FillTransparency = 0.3 + (wave * 0.7)
+													hl.OutlineTransparency = 0.1 + (wave * 0.5)
+													task.wait()
+												end
+												if hl then hl:Destroy() end
+												if pulseSound then pulseSound:Destroy() end
+
+												-- [[ PHASE 4: THE WAKE UP & TOMELSS BESTOWAL ]]
+												if targetPlayer.Character and targetPlayer.Character:FindFirstChild("Head") and targetHum.Health > 0 then
+
+													-- Trigger the epic "Learn" sparkle and sound effect on the target!
+													Commands.Learn(targetPlayer)
+
+													local targetTracker = Instance.new("ObjectValue")
+													targetTracker.Name = "BestowedTarget"
+													targetTracker.Value = targetPlayer.Character
+													targetTracker.Parent = Player
+
+													local blessingFolder = Instance.new("Folder")
+													blessingFolder.Name = "SeraphBlessing"
+													blessingFolder.Parent = targetPlayer.Character
+
+													-- Stat Boosts (Added "FromSeraph" tag so they cleanly delete!)
+													local spd = Instance.new("NumberValue")
+													spd.Name = "SpeedBoost"
+													spd.Value = 2
+													local sTag = Instance.new("BoolValue", spd)
+													sTag.Name = "FromSeraph"
+													spd.Parent = targetPlayer.Character:FindFirstChild("Boosts") or blessingFolder
+
+													local hp = Instance.new("NumberValue")
+													hp.Name = "HealthBoost"
+													hp.Value = 10 / targetHum.MaxHealth 
+													local hTag = Instance.new("BoolValue", hp)
+													hTag.Name = "FromSeraph"
+													hp.Parent = targetPlayer.Character:FindFirstChild("Boosts") or blessingFolder
+
+													-- Temporary Tomeless!
+													local gaveTomeless = Instance.new("BoolValue")
+													gaveTomeless.Name = "GaveTomeless"
+													gaveTomeless.Parent = blessingFolder
+
+													local tData = game.ServerStorage.PlayerData:FindFirstChild(targetPlayer.Name)
+													if tData and not tData.Skills.Value:find("Tomeless") then
+														tData.Skills.Value = tData.Skills.Value .. ",Tomeless"
+														gaveTomeless.Value = true
+													end
+
+													-- Give them the true functional Halo
+													local clone = HaloUnion:Clone()
+													clone.Name = "SeraphHalo"
+													clone.CanCollide = false
+													clone.Anchored = false
+													clone.Massless = true
+													clone.Parent = targetPlayer.Character:WaitForChild("Head")
+
+													local weld = Instance.new("Weld")
+													weld.Part0 = targetPlayer.Character.Head
+													weld.Part1 = clone
+													weld.C0 = CFrame.new(0, 0.8, 0)
+													weld.Parent = clone
+
+													clone.Color = startColor
+													clone.Material = Enum.Material.Neon
+
+													-- Clean up stats & remove Tomeless if they die while possessing the halo
+													local destroyCon
+													destroyCon = blessingFolder.AncestryChanged:Connect(function()
+														if not blessingFolder:IsDescendantOf(game) then
+															if spd and spd.Parent then spd:Destroy() end
+															if hp and hp.Parent then hp:Destroy() end
+															if clone then clone:Destroy() end
+															if gaveTomeless.Value and tData then
+																tData.Skills.Value = string.gsub(tData.Skills.Value, ",Tomeless", "")
+															end
+															destroyCon:Disconnect()
+														end
+													end)
+												end
+											end)
+										end
+									end
+								end
+
+								if bestowActive then bestowActive:Destroy() end
+							end)
 						end
 					end
 				end
