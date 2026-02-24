@@ -275,8 +275,8 @@ function taghumanoid(character,enemy,info)
 		return
 	end
 
-	if Player and EnemyPlayer then
-		if EnemyPlayer and Player and (EnemyPlayer:FindFirstChild("Sect") and Player:FindFirstChild("Sect")) or (Player and EnemyPlayer and Player:FindFirstChild("Sect") and Player.Sect.Value == EnemyPlayer.Name) or (Player and EnemyPlayer and EnemyPlayer:FindFirstChild("Sect") and EnemyPlayer.Sect.Value == Player.Name) then
+	if Player and EnemyPlayer and Player ~= EnemyPlayer then
+		if (EnemyPlayer:FindFirstChild("Sect") and Player:FindFirstChild("Sect")) or (Player:FindFirstChild("Sect") and Player.Sect.Value == EnemyPlayer.Name) or (EnemyPlayer:FindFirstChild("Sect") and EnemyPlayer.Sect.Value == Player.Name) then
 			if EnemyPlayer.Sect.Value == Player.Sect.Value or Player.Name == EnemyPlayer.Sect.Value or EnemyPlayer.Name == Player.Sect.Value then
 				if info.damage and info.damage > 0 then
 					ehumanoid.Health += info.damage
@@ -575,6 +575,43 @@ function taghumanoid(character,enemy,info)
 			end
 			return
 		end
+	end
+	-- [[ CAMEO BLAST COUNTER ]]
+	if enemy:FindFirstChild("CameoCounter") and character ~= enemy and info.damage then
+		-- 1. Fling the attacker radically outward
+		local pushDir = (character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Unit
+		local bv = Instance.new("BodyVelocity")
+		game.CollectionService:AddTag(bv, "AllowedBM")
+		bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+		bv.Velocity = pushDir * 65 + Vector3.new(0, 25, 0)
+		bv.Parent = character.HumanoidRootPart
+		game:GetService("Debris"):AddItem(bv, 0.4)
+
+		-- 2. Ragdoll and Stun the attacker
+		create("Knocked", 3, character)
+		create("Stun", 3, character)
+
+		-- 3. Strobe them white for 2 seconds like a blast effect
+		local highlight = Instance.new("Highlight")
+		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		highlight.FillColor = Color3.fromRGB(255, 255, 255)
+		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+		highlight.FillTransparency = 1
+		highlight.OutlineTransparency = 1
+		highlight.Parent = character
+
+		local endTick = tick() + 2
+		task.spawn(function()
+			while tick() < endTick and highlight and highlight.Parent do
+				local wave = (math.sin(tick() * 12) + 1) / 2
+				highlight.FillTransparency = 0.2 + (wave * 0.8)
+				highlight.OutlineTransparency = 0.1 + (wave * 0.9)
+				task.wait()
+			end
+			if highlight then highlight:Destroy() end
+		end)
+
+		return -- Completely cancels the incoming attack!
 	end
 	if FindFirstChild(enemy,"Immortal") or FindFirstChild(enemy,"IFRAME") then
 		if (info.falldamage and enemy:FindFirstChild("FallDamageBypass")) or info.torture2 or (info.falldamage and FindFirstChild(enemy, "Dissolved")) or info.ignoreiframe then
@@ -3801,6 +3838,72 @@ function taghumanoid(character,enemy,info)
 				danger.Value += 30
 			else
 				danger.Value = 120
+			end
+		end
+	end
+	-- [[ ANTI-FARM & UNDERDOG XP SYSTEM ]]
+	-- Make sure it's a real attack (not poison, burn, fall damage, or hitting yourself)
+	if character and enemy and character ~= enemy and info.damage and info.damage > 0 and not info.poison and not info.burn and not info.falldamage and not info.isdeferred then
+		-- Ensure both are actual players (not monsters)
+		if playerdata and enemydata then 
+			local baseXP = 5 -- The default XP given for a standard hit
+			local xpMultiplier = 1
+
+			-- [[ 1. ANTI-ALT FARM CHECK (Are they fighting back?) ]]
+			local isFightingBack = false
+			-- If they have a weapon out, or have Danger/Combat Tag, they are fighting back
+			if enemy:FindFirstChildWhichIsA("Tool") or enemy:FindFirstChild("CombatTag") or enemy:FindFirstChild("Charge") or enemy:FindFirstChild("Danger") then
+				isFightingBack = true
+			end
+
+			if isFightingBack then
+				xpMultiplier = xpMultiplier + 1.0 
+			else
+				xpMultiplier = xpMultiplier * 0.1 -- Defenseless alt farming gives basically 0 XP
+			end
+
+			-- [[ 2. FULL ROGUE LINEAGE CLASS TIER DICTIONARY ]]
+			local classTiers = {
+				["Freshie"] = 0, ["None"] = 0, [""] = 0, 
+				["Thief"] = 1, ["Warrior"] = 1, ["Spear"] = 1, ["Acolyte"] = 1, ["Scholar"] = 1,
+
+				["Assassin"] = 2, ["Blacksmith"] = 2, ["Illusionist"] = 2, ["Necromancer"] = 2, 
+				["Monk"] = 2, ["Akuma"] = 2, ["DragonKnight"] = 2, ["Dragon Knight"] = 2, ["Greatsword"] = 2, ["Spy"] = 2, 
+				["SigilKnight"] = 2, ["ChurchKnight"] = 2, ["Samurai"] = 2, ["Botanist"] = 2, 
+				["Spearfisher"] = 2, ["Spearman"] = 2,
+
+				["Shinobi"] = 3, ["Oni"] = 3, ["Faceless"] = 3, ["MasterIllusionist"] = 3, ["Master Illusionist"] = 3, ["Ronin"] = 3,
+				["Abysswalker"] = 3, ["DarkSigilKnight"] = 3, ["Whisper"] = 3, ["Florist"] = 3,
+				["TridentFisher"] = 3, ["SigilKnightCommander"] = 3, ["DeepKnight"] = 3, 
+				["StreetFighter"] = 3, ["Lancer"] = 3, ["Master Necromancer"] = 3, ["DragonSage"] = 3, 
+				["BeastSlayer"] = 3, ["Candence"] = 3, ["DragonSlayer"] = 3, ["Dragon Slayer"] = 3, ["Lapidarist"] = 3
+			}
+
+			local aTier = classTiers[playerdata.Class.Value] or 0
+			local tTier = classTiers[enemydata.Class.Value] or 0
+
+			if tTier > aTier then
+				xpMultiplier = xpMultiplier + (0.5 * (tTier - aTier)) -- Underdog Bonus
+			elseif aTier > tTier then
+				xpMultiplier = xpMultiplier * 0.5 -- Punching Down Penalty
+			end
+
+			-- [[ 3. AWARD THE FINAL XP TO THE CORRECT WEAPON ]]
+			local finalXP = math.floor(baseXP * xpMultiplier)
+
+			if finalXP > 0 then
+				local wType = playerdata.Weapon.Value
+
+				-- Automatically applies XP to whatever weapon class they currently have equipped
+				if (wType == "Sword" or wType == "Katana" or wType == "Greatsword") and playerdata:FindFirstChild("SwordXP") then
+					playerdata.SwordXP.Value = playerdata.SwordXP.Value + finalXP
+				elseif wType == "Dagger" and playerdata:FindFirstChild("DaggerXP") then
+					playerdata.DaggerXP.Value = playerdata.DaggerXP.Value + finalXP
+				elseif wType == "Spear" and playerdata:FindFirstChild("SpearXP") then
+					playerdata.SpearXP.Value = playerdata.SpearXP.Value + finalXP
+				elseif (wType == "None" or wType == "Caestus" or info.fist) and playerdata:FindFirstChild("FistXP") then
+					playerdata.FistXP.Value = playerdata.FistXP.Value + finalXP
+				end
 			end
 		end
 	end
