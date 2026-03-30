@@ -2803,6 +2803,21 @@ function taghumanoid(character,enemy,info)
 						end
 					end
 				end
+
+				-- [[ THE RESTORED STUN LOGIC ]]
+				if not info.nodamage then
+					if not info.nostun and not dodged and not info.noaddstun then
+						if ehumanoid.Health - info.damage > 0 then
+							if not FindFirstChild(enemy, "CantBeStunned") then
+								create("Stun", stun, enemy)
+							end
+							if FindFirstChild(enemy,"ReturnStun") and not info.ignorecounter then
+								create("Stun", stun, character)
+							end
+						end
+					end
+				end
+				-- [[ END STUN LOGIC ]]
 			end
 			if info.angergrab then
 				create("Knocked", 3, enemy)
@@ -3892,7 +3907,7 @@ function taghumanoid(character,enemy,info)
 			local finalXP = math.floor(baseXP * xpMultiplier)
 
 			if finalXP > 0 then
-				local wType = playerdata.Weapon.Value
+				local wType = playerdata.PrimaryWeapon.Value
 
 				-- Automatically applies XP to whatever weapon class they currently have equipped
 				if (wType == "Sword" or wType == "Katana" or wType == "Greatsword") and playerdata:FindFirstChild("SwordXP") then
