@@ -1,0 +1,3810 @@
+local FindFirstChild,WaitForChild = game.FindFirstChild,game.WaitForChild
+local GetChildren,GetDescendants = game.GetChildren,game.GetDescendants
+local CollectionService = game:GetService("CollectionService")
+local commands = require(game.ServerScriptService.Modules.Commands)
+local TemperatureHandler = require(game.ServerScriptService.Modules.TemperatureHandler)
+local u4 = require(game.ServerScriptService.Modules.EffectModule)
+local combatanims = game.ReplicatedStorage.CombatAnims
+local TweenService = game:GetService("TweenService")
+
+local Modules = game.ReplicatedStorage:WaitForChild("Modules")
+local debrisModule = require(Modules.Debris)
+local boltModule = require(Modules.LightningBolt)
+local sparks = require(Modules.LightningBolt.LightningSparks)
+
+
+local function newFunc(func,...)
+	coroutine.resume(coroutine.create(func),...)
+end
+
+local function CheckRace(PlayerData, Race)
+	local IsRace = false
+	if PlayerData.Race.Value == Race then
+		IsRace = true
+	end
+	
+	return IsRace
+end
+
+
+local function create(name,deletetime,parent)
+	local i = Instance.new("Accessory")
+	i.Name = name
+	i.Parent = parent
+	if deletetime then
+		if (name == "Knocked" and game.Players:FindFirstChild(parent.Name)) and game.ServerStorage.PlayerData[parent.Name].Injuries.Value:find("BrokenRib") then
+			_G.Debris:AddItem(i, deletetime * 1.25)
+			for i,v in pairs(parent:GetChildren()) do
+				if v.Name == "Knocked" then
+					_G.Debris:AddItem(v,deletetime * 1.25)
+				end
+			end
+		elseif name == "Knocked" then
+			_G.Debris:AddItem(i, deletetime)
+			for i,v in pairs(parent:GetChildren()) do
+				if v.Name == "Knocked" then
+					_G.Debris:AddItem(v,deletetime)
+				end
+			end
+		else
+			_G.Debris:AddItem(i,deletetime)
+		end
+	end
+	return i
+end
+
+local function changetransparency(enemy,transparency)
+	enemy.Torso.Transparency = transparency
+	for _,v in pairs(GetChildren(enemy.Torso))do
+		if v:IsA("Motor6D")then
+			v.Part1.Transparency = transparency
+		end
+	end
+	for i,v in pairs(enemy:GetDescendants()) do
+		if v.Name == "EnchantEffect" then
+			if transparency == 1 then
+				v.Enabled = false
+			else
+				v.Enabled = true
+			end
+		end
+	end
+end
+
+local function plantedcheck(v)
+	if FindFirstChild(v,"Planted")then
+		return true
+	else
+		return false
+	end
+end
+
+local function wrap(...)
+	coroutine.wrap(...)()
+end
+
+local function bodyvelocitycheck(c, checkit)
+	local children = GetChildren(c.HumanoidRootPart)
+	for i = 1,#children do
+		local v = children[i]
+		if v.ClassName == "BodyVelocity"then
+			v:Destroy()
+		end
+	end
+end
+
+local function hitknockback(root,parent)
+	if not plantedcheck(parent.Parent)then
+		bodyvelocitycheck(parent.Parent)
+		local bv = Instance.new("BodyVelocity")
+		CollectionService:AddTag(bv,"AllowedBM")
+		local novel = Instance.new("Accessory")
+		novel.Name = "noveloc"
+		novel.Parent = parent.Parent
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(novel,0.2)
+		bv.P = 1250
+		bv.MaxForce = Vector3.new(1000000,0,1000000)
+		bv.Velocity = root.CFrame.LookVector.unit*10
+		bv.Parent = parent
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(bv,0.2)
+	end
+end
+
+local function soundplay(part,sound,pitch)
+	if FindFirstChild(part,sound)then
+		local sound = part[sound]
+		if pitch then
+			sound.Pitch = tonumber(pitch)
+		end
+		sound:Play()
+	end
+end
+
+local FlowingParry = game.ServerStorage.NPCAnims.FlowingParry
+
+local function Send(Title, Content, Color)
+	shared.PostDiscordMessage(Title,Content,Color)
+end
+
+local function getCurseCount(Character)
+	local count = 0;
+	for i,v in pairs(Character.HumanoidRootPart:GetChildren()) do
+		if v.Name == "Cursey" and v.Enabled == true then
+			count += 1
+		end
+	end
+	return count
+end
+
+local function getGrimCurse(Character)
+	local count = 0;
+	for i,v in pairs(Character.HumanoidRootPart:GetChildren()) do
+		if v.Name == "GrimCurse" and v.Enabled == true then
+			count += 1
+		end
+	end
+	return count
+end
+
+local function WallSlamEffect(p,h,sf)
+
+	if sf then
+
+		local wallslam = script.WallSlam:Clone()
+		wallslam.CFrame = CFrame.new(p, p + sf)					
+		wallslam.Parent = workspace.Thrown
+		game.Debris:AddItem(wallslam,5)
+		wallslam.Sound:Play()
+
+		game.ReplicatedStorage.Requests.ClientEffect:FireAllClients("ParticleEmit",{wallslam})
+
+	end
+end
+
+local function ray(startpos, endpos)
+	local myParams = RaycastParams.new()
+	myParams.FilterType = Enum.RaycastFilterType.Blacklist
+	myParams.FilterDescendantsInstances = {workspace.Live, workspace.Thrown, workspace.AreaMarkers, workspace.MonsterSpawns}
+	myParams.IgnoreWater = true
+
+	local ray = workspace:Raycast(startpos, endpos, myParams)
+
+	if ray then
+		local dotProduct = ray.Normal:Dot(Vector3.new(0, 1, 0))
+		if dotProduct <= 0.3 then
+			return ray.Instance, ray.Position, ray.Normal
+		end
+	end
+end
+function taghumanoid(character,enemy,info)
+	if game.ServerStorage:FindFirstChild("ServerShutdown") then return end
+	local anyreturn = nil
+	if enemy:FindFirstChild('Grabbed') then
+		return
+	end
+	if enemy:FindFirstChild('ForceField') then
+		return
+	end
+	local Player = game.Players:GetPlayerFromCharacter(character) or nil
+	local EnemyPlayer = game.Players:GetPlayerFromCharacter(enemy) or nil
+	local cancellingthat = false
+	local blocking = FindFirstChild(enemy,"Blocking")
+	local enemydata = EnemyPlayer and game.ServerStorage.PlayerData:FindFirstChild(EnemyPlayer.Name)or nil
+	local playerdata = Player and game.ServerStorage.PlayerData:FindFirstChild(Player.Name)or nil
+	local ehumanoid = enemy:FindFirstChild('Humanoid')
+	local humanoid = character:FindFirstChild('Humanoid')
+	local root = character:FindFirstChild('HumanoidRootPart')
+	local eroot = enemy:FindFirstChild('HumanoidRootPart')
+	if not ehumanoid or not humanoid or not root or not eroot then
+		return
+	end	
+	
+
+	if info.ignorehouse and playerdata and enemydata and enemydata.LastName.Value ~= "" and enemydata.LastName.Value == playerdata.LastName.Value then
+		return
+	end
+	if ehumanoid.Health<= 0 then
+		return
+	end
+	if not info then
+		return
+	end
+	info = table.clone(info)
+	pcall(function()
+		if enemydata and info.damage and info.damage <= 0 and enemydata.Injuries.Value ~= "" then
+			info.damage = nil
+		end
+	end)
+	
+	local knockback = false
+	local behind = false
+	local blocked = false
+	local knockm = 35
+	if workspace:FindFirstChild("passived") then
+		if not (enemy:FindFirstChild("FightAllow") or character:FindFirstChild("FightAllow")) then
+			return
+		end
+	end
+	if FindFirstChild(enemy,"TimeStopped")then
+		info.downbypass = true
+		repeat wait() until not FindFirstChild(enemy,"TimeStopped")
+	end
+	
+
+	
+	if FindFirstChild(enemy, "Expansion") then
+		if info.damage and info.damage > 0 then
+			info.damage *= 5
+		end
+	end
+	local cancelknockback = false
+
+
+	if enemy:FindFirstChild("MonsterInfo") and enemy.MonsterInfo:FindFirstChild("MonsterType") and enemy.MonsterInfo.MonsterType.Value == "Howler" then
+		if info.curse and not info.physical then
+			u4.HowlerLannis(enemy)
+			return
+		end
+	end
+	if enemy:FindFirstChild("MonsterInfo") and enemy.MonsterInfo:FindFirstChild("MonsterType") and enemy.MonsterInfo.MonsterType.Value == "Terra Serpent" then
+		if not game.ServerStorage.PlayerData:FindFirstChild(character.Name) then return end;
+		if not info.physical then
+			return
+		end
+	end
+
+	if EnemyPlayer and EnemyPlayer.Backpack:FindFirstChild("Epitaph") and not EnemyPlayer:FindFirstChild("Danger") then
+		create("IFRAME",1,enemy)
+		create("NoDam",0.1,enemy)
+		local dodgeanim = ehumanoid:LoadAnimation(script["Dodge"..math.random(1,2)])
+		dodgeanim:Play()
+		enemy.HumanoidRootPart.Dodgerr:Play()
+		
+		if EnemyPlayer and not info.falldamage then
+			local danger = enemy:FindFirstChild("Danger")or Instance.new("NumberValue",EnemyPlayer)
+			danger.Name = "Danger"
+			if danger.Value+45<120 then
+				danger.Value+=30
+			else
+				danger.Value = 120
+			end
+		end
+		
+		return
+	end
+
+	if Player and EnemyPlayer then
+		if EnemyPlayer and Player and (EnemyPlayer:FindFirstChild("Sect") and Player:FindFirstChild("Sect")) or (Player and EnemyPlayer and Player:FindFirstChild("Sect") and Player.Sect.Value == EnemyPlayer.Name) or (Player and EnemyPlayer and EnemyPlayer:FindFirstChild("Sect") and EnemyPlayer.Sect.Value == Player.Name) then
+			if EnemyPlayer.Sect.Value == Player.Sect.Value or Player.Name == EnemyPlayer.Sect.Value or EnemyPlayer.Name == Player.Sect.Value then
+				if info.damage and info.damage > 0 then
+					ehumanoid.Health += info.damage
+					return
+				end
+			end
+		end
+
+		if workspace.Map:FindFirstChild("Church") then
+			local v44, v45 = workspace:FindPartOnRayWithWhitelist(Ray.new(eroot.Position, Vector3.new(0, 1000, 0)), { workspace.AreaMarkers })
+			if v44 and v44.Name == "Church of Light" then
+				local sectowner = v44:FindFirstChildOfClass("Folder").Name
+
+				if EnemyPlayer and Player then
+					if (Player:FindFirstChild("Sect") and Player.Sect.Value == sectowner) or Player.Name == sectowner then
+					else
+						enemy = character
+						eroot = root
+						EnemyPlayer = Player
+						ehumanoid = humanoid
+						enemydata = playerdata
+					end
+				else
+					return
+				end
+			end
+		end
+	end
+	
+	if character:FindFirstChild("Rings") then
+		if character["Rings"]:FindFirstChild("Poser's Ring") and playerdata.PrimaryWeapon.Value == "Katana" and character:FindFirstChild("HasKatana") and not enemy:FindFirstChild('PoserCD') and not info.falldamage then
+			game.ServerStorage.Requests.Posers:Fire(enemy,character,info.damage)
+			info.damage = 0
+		end
+	end
+	
+	if character:FindFirstChild("Rings") then
+		if character["Rings"]:FindFirstChild("Ishiin's Ring") then
+			info.damage *= 1.20
+		end
+	end
+
+	if info.adddeb then
+		create(info.adddeb,0.2,enemy)
+	end
+
+	local minfo = enemy:FindFirstChild("MonsterInfo")
+	if minfo then
+		if enemy.MonsterInfo:FindFirstChild("MonsterType") and enemy.MonsterInfo.MonsterType.Value ~= "Terra Serpent" and enemy.MonsterInfo.MonsterType.Value ~= "Howler" and enemy.MonsterInfo.MonsterType.Value ~= "Zombie Scroom" and enemy.MonsterInfo.MonsterType.Value ~= "Howwgy" and enemy.MonsterInfo.MonsterType.Value ~= "Ice Dragon" and enemy.MonsterInfo.MonsterType.Value ~= "Golem King" and enemy.MonsterInfo.MonsterType.Value ~= "Golem Turret" then
+			if FindFirstChild(enemy,"Knocked")then
+				if not info.curse and not (info.sunlight and game.CollectionService:HasTag(enemy, "Vampirism")) then
+					if not info.downbypass and not info.ignoreragdoll then
+						return
+					end
+				elseif info.curse and info.anticurse then
+					return
+				end
+			end
+		end
+	else
+		if FindFirstChild(enemy,"Knocked")then
+			if not info.curse and not (info.sunlight and game.CollectionService:HasTag(enemy, "Vampirism")) and not (info.axe and enemy:FindFirstChild("Unconscious")) then
+				if not info.downbypass and not info.ignoreragdoll then
+					return
+				end
+			elseif info.curse and info.anticurse then
+				return
+			end
+		end
+	end
+
+	if enemy:FindFirstChild("MonsterInfo") and enemy.MonsterInfo:FindFirstChild("MonsterType") and enemy.MonsterInfo.MonsterType.Value == "Terra Serpent" then
+		if not game.ServerStorage.PlayerData:FindFirstChild(character.Name) then return end;
+		if info.fist and not info.smash then
+			if game.ServerStorage.PlayerData[character.Name].Class.Value ~= "Akuma" or game.ServerStorage.PlayerData[character.Name].Class.Value ~= "Oni" then
+				enemy.Hitboxes.Hitbox1.MetalClash:Play()
+				enemy.Hitboxes.Hitbox1.Sparks:Emit(5)
+				return
+			end
+		elseif info.smash and info.fist and info.damage then
+			info.damage *= 2.5
+		end
+	end
+
+	if enemy:FindFirstChild("MonsterInfo") and enemy.MonsterInfo:FindFirstChild("MonsterType") and enemy.MonsterInfo.MonsterType.Value == "Golem King" then
+		if info.damage then
+			info.damage *= 1.25
+		end
+	end
+
+	if info.exhaust then
+		if not character:FindFirstChild("decomposingrn") then
+			for i,v in pairs(character:GetDescendants()) do
+				if v.Name == "FreezeRoot" or v.Name == "Planted" or v.Name == "Hardened" or v.Name == "Action" or (v.Name == "HealthRegen" and v.Parent == character.Boosts) or (v.Name == "ClickDetector" and v.Parent == character.Head)  then
+					v:Destroy()
+				end
+			end
+			if game.CollectionService:HasTag(character, "Decomposing") then
+				game.CollectionService:RemoveTag(character, "Decomposing")
+			end
+		elseif character:FindFirstChild("decomposingrn") then
+			task.spawn(function()
+				repeat wait() until not character:FindFirstChild("decomposingrn")
+				wait(1)
+				for i,v in pairs(character:GetDescendants()) do
+					if v.Name == "FreezeRoot" or v.Name == "Planted" or v.Name == "Hardened" or v.Name == "Action" or (v.Name == "HealthRegen" and v.Parent == character.Boosts) or (v.Name == "ClickDetector" and v.Parent == character.Head)  then
+						v:Destroy()
+					end
+				end
+				if game.CollectionService:HasTag(character, "Decomposing") then
+					game.CollectionService:RemoveTag(character, "Decomposing")
+				end
+			end)
+		end
+	end
+
+	if info.executes and game.ServerStorage.PlayerData:FindFirstChild(enemy.Name) and CheckRace(game.ServerStorage.PlayerData:FindFirstChild(enemy.Name), 'Cameo') or info.executes and game.ServerStorage.PlayerData:FindFirstChild(enemy.Name) and CheckRace(game.ServerStorage.PlayerData:FindFirstChild(enemy.Name), 'TrueCameo') then
+		info.executes = false
+	end
+	if enemy:FindFirstChild("CantBeKnocked") then
+		info.executes = false
+	end
+
+	if info.smallknockup then
+		if not plantedcheck(enemy) then
+			local bv = Instance.new("BodyVelocity")
+			bv.Name = "SmallKnockUp"
+			bv.MaxForce = Vector3.new(0,1,0) * 1000000
+			bv.Velocity = Vector3.new(0,35,0)
+			bv.Parent = enemy.HumanoidRootPart
+			create("Knocked", 1, enemy)
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv, 0.2)
+		end
+	end
+	if info.knockup and info.issixfold then
+		if not plantedcheck(enemy)then
+			bodyvelocitycheck(enemy)
+			create("Knocked", 2.4, enemy)
+			local trail = game:GetService("ServerStorage").Assets.EverythingForThunder.LightningTrailPart:Clone()
+			trail.Parent = workspace.Thrown
+			trail.Weld.Part0 = root
+			_G.Debris:AddItem(trail,2)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Velocity = Vector3.new(0,100,0)
+			bv.Parent = eroot
+			_G.Debris:AddItem(bv,0.1)
+			create("TPSafe",2.2,character)
+			local FreezeRoot = FindFirstChild(enemy,"FreezeRoot")if FreezeRoot then
+				FreezeRoot:Destroy()
+			end
+			task.wait(0.4)
+			local newtransparency = Instance.new("NumberValue")
+			newtransparency.Value = 1
+			newtransparency.Name = "Transparency"
+			newtransparency.Parent = character.Boosts
+			_G.Debris:AddItem(newtransparency,2)
+			for i,v in pairs(enemy:GetChildren()) do
+				if v:IsA("BasePart") then
+					v.Anchored = true
+					task.delay(1,function()
+						v.Anchored = false
+					end)
+				end
+			end
+			character.Torso.Anchored = true
+			for i = 1,6 do
+				if i == 6 then
+					create("Knocked", 2.4, enemy)
+					game.ServerStorage.Requests.TagHumanoid:Fire(enemy,enemy,{damage = 30,nododge = true,downbypass = true,katana = true,physical = true,bypassfischdodge = true,slash = true,isclap = true,})
+					root.LightningHit:Play()
+					root.LightningBurst:Play()
+					root.Thunderbolt:Play()
+					break
+				end
+				root.LightningHit:Play()
+				root.LightningBurst:Play()
+				character.HumanoidRootPart.CFrame = CFrame.new((enemy.Torso.CFrame * CFrame.new(math.random(-12,12),math.random(-12,12),math.random(-12,12))).Position,enemy.Torso.CFrame.Position)
+				task.wait(0.15)
+			end	
+			local v39, v40, v41 = workspace:FindPartOnRayWithIgnoreList(Ray.new(enemy.Torso.Position, Vector3.new(0, 6, 0)), { workspace.Live, workspace.MonsterSpawns, workspace.Ingredients, workspace.Thrown })
+			local v42 = CFrame.new(enemy.Torso.Position) + Vector3.new(0, -10, 0)
+			if v39 and v39.CanCollide then
+				v42 = CFrame.new(v40) - Vector3.new(0, 8, 0)
+			end
+			character:PivotTo(v42)
+			local v43 = Instance.new("BodyVelocity")
+			game.CollectionService:AddTag(v43, "AllowedBM")
+			v43.Velocity = Vector3.new(0, -50, 0)
+			v43.MaxForce = Vector3.new(0, 10000, 0)
+			v43.Parent = character.HumanoidRootPart
+			_G.Debris:AddItem(v43,0.2)
+			for i,v in pairs(trail:GetDescendants()) do
+				if v:IsA("ParticleEmitter") then
+					v.Enabled = false
+				end
+			end
+			create("Immortal",2.2,character)
+			create("Stun",2.2,character)
+			create("NoFall",2.2,character)
+			create("NoFall",2.2,enemy)
+			task.wait(0.3)
+			character.Torso.Anchored = false
+			if FindFirstChild(character,"Stun") then
+				character:FindFirstChild("Stun"):Destroy()
+			end
+		end
+	end
+	if info.knockup and info.PlanetDestroyer then
+		if not plantedcheck(enemy)then
+			knockback = true
+			bodyvelocitycheck(enemy)
+			create("Knocked", 1.64, enemy)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Velocity = Vector3.new(0,100,0)
+			bv.Parent = eroot
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv,0.3)
+		end
+	end
+	if info.knockup and info.Terra then
+		if not plantedcheck(enemy)then
+			knockback = true
+			bodyvelocitycheck(enemy)
+			create("Knocked", 1.64, enemy)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Velocity = Vector3.new(0,50,0)
+			bv.Parent = eroot
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv,0.3)
+		end
+	end
+	
+	if info.knockup and info.Thrust then
+		if not plantedcheck(enemy)then
+			knockback = true
+			bodyvelocitycheck(enemy)
+			create("Knocked", 1.95, enemy)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Velocity = Vector3.new(0,55,0)
+			bv.Parent = eroot
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv,0.3)
+		end
+	end
+	if not FindFirstChild(enemy,"FreezeRoot") and (info.executes and info.damage and not enemy:FindFirstChild("Immortal") and not enemy:FindFirstChild("Knocked") and not enemy:FindFirstChild("Unconscious") and not enemy:FindFirstChild("SpellBlocking")) or (info.executes and info.damage and info.axe) then
+		if (enemy.Humanoid.Health-info.damage<=0 and info.executes) or (info.axe and enemy:FindFirstChild("Unconscious"))  then
+			if enemydata and string.match(enemydata.Skills.Value, "Mythic Stability") and not info.IgnoreStability then return end
+			if enemy.Humanoid.Health>0 then
+				if Player and FindFirstChild(Player.Backpack,"NoKill")then
+					if EnemyPlayer then
+						for _,v in pairs(GetChildren(EnemyPlayer))do
+							if v.Name == "Danger"then
+								v:Destroy()
+							end
+						end
+					end
+				end
+
+				if info.head  then
+					enemy.Humanoid.BreakJointsOnDeath = false
+					local HeadOff = game.ServerStorage.Assets.HeadOff:Clone()
+					HeadOff.Parent = enemy
+					HeadOff:PivotTo(enemy.HumanoidRootPart.CFrame)
+					HeadOff.WeldConstraint.Part0 = enemy.HumanoidRootPart
+					HeadOff.HumanoidRootPart.SwordHit:Play()		
+
+					for i,v in pairs(enemy.Torso:GetChildren()) do
+						if string.match(v.Name,"Neck") then
+							v:Destroy()
+							break
+						end	
+					end
+
+					local BodyVelocity3 = Instance.new("BodyVelocity")
+					game:GetService('CollectionService'):AddTag(BodyVelocity3,"AllowedBM")
+					BodyVelocity3.Parent = enemy.Head
+					BodyVelocity3.MaxForce = Vector3.new(1,1,1) * math.huge
+					BodyVelocity3.P = 10000
+					BodyVelocity3.Velocity = enemy.HumanoidRootPart.CFrame.upVector * 25 + Vector3.new(math.random(-30,30),0,math.random(-30,30))
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(BodyVelocity3,0.25)			
+				end
+				
+
+				
+				_G.Death(enemy,character)
+			end
+			return
+		end
+	end
+	if FindFirstChild(enemy,"Immortal") or FindFirstChild(enemy,"IFRAME") then
+		if (info.falldamage and enemy:FindFirstChild("FallDamageBypass")) or info.torture2 or (info.falldamage and FindFirstChild(enemy, "Dissolved")) or info.ignoreiframe then
+		else
+			return
+		end
+	end
+	if character.Parent ~= workspace.Live and not character:FindFirstChild("LichSummon") then
+		return
+	end
+	if enemy.Parent ~= workspace.Live and not enemy:FindFirstChild("LichSummon") then
+		return
+	end
+	if enemy:FindFirstChild("Hallucination") or character:FindFirstChild("Hallucination") then
+		return
+	end
+	if game.PlaceId == 9329476718 and not enemy:FindFirstChild("FightAllow") then
+		return
+	end
+
+	if game.PlaceId == 9329476718 and not character:FindFirstChild("FightAllow") then
+		return
+	end
+
+	if (CollectionService:HasTag(character,"Vampirism") or character.Boosts:FindFirstChild("SuperStrength") or (playerdata and CheckRace(playerdata, 'TrueCameo'))) or (playerdata and CheckRace(playerdata, 'Cameo')) and info.physical then
+		knockm *= 2
+	end
+	if info.canspellcounter and info.damage and enemy:FindFirstChild("CounterSpell") then
+		enemy = character
+		enemydata = playerdata
+		eroot = root
+		ehumanoid = humanoid
+		EnemyPlayer = Player
+	end
+	if info.snarvin and enemy:FindFirstChild("MonShield") then
+		if not plantedcheck(enemy) then
+			if character:FindFirstChild("RecentBlockBack") then
+				return
+			end
+			create("RecentBlockBack",0.75,character)
+			knockback = true
+			bodyvelocitycheck(character)
+			create("Knocked", 2, character)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Velocity = root.CFrame.lookVector.unit*-35+Vector3.new(0,10,0)
+			bv.Parent = root
+			eroot.SLAMJAM:Play()
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv,0.5)
+			create("ChargeBlock",0.85,enemy)
+		end
+		return
+	end
+	if (eroot.Position-root.Position).Unit:Dot(eroot.CFrame.LookVector) >= 0.25 and not FindFirstChild(enemy, "MonShield") then
+		behind = true
+	end
+	if FindFirstChild(enemy,"InDialogue")then
+		FindFirstChild(enemy,"InDialogue"):Destroy()
+	end
+	if info.sparks then
+		eroot.Sparks:Emit(20)
+	end
+	if info.wraithfire then
+		local burncolor = Color3.new(0,0,0)
+		local manainfo = {}
+		manainfo.manastop = true
+		manainfo.wraithfire = true
+		commands.StartBurn(enemy,eroot,burncolor,manainfo,character)
+	end
+	if info.pullTo then
+		local BP = Instance.new("BodyPosition")
+		BP.Name = "pullTo"
+		BP.MaxForce = Vector3.new(60000,60000,60000)
+		BP.P = 10000	
+		BP.D = 500
+		BP.Parent = eroot
+		BP.Position = info.pullTo
+		wait(1)
+		BP:Destroy()
+	end;
+	if info.waterspikes then
+		local delay_inbetween = info.delay or 0.2
+		for i = 1,info.waterspikes do
+			local spike = game.ServerStorage.Assets.Trident.Spike:Clone()
+			spike.Parent = game.Workspace.Thrown
+			spike.Position = eroot.Position+Vector3.new(math.random(-5,5),-10,math.random(-5,5))
+			spike.CFrame = CFrame.lookAt(spike.Position,eroot.Position)
+			spike.Orientation = spike.Orientation+Vector3.new(-80,0,0)
+			spike.ParticleEmitter:Emit(10)
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(spike,0.6)
+			TweenService:Create(spike,TweenInfo.new(0.4),{CFrame=spike.CFrame*CFrame.new(0,spike.Size.Y,0),Transparency = 1}):Play()
+			game.ServerStorage.Requests.TagHumanoid:Fire(character,enemy,{physical = true,spear = true,slash = true,damage = info.damage/3, noenchant = true})
+			task.wait(delay_inbetween)
+		end
+	end
+	if info.waterspikes2 then
+		local waittime = 0.2
+		for i = 1,5 do
+			local sound = Instance.new("Sound", eroot)
+			sound.SoundId = "rbxassetid://9116384483"
+			sound.MaxDistance = 100
+			sound.Volume = 0.4
+			sound.PlaybackSpeed = 1.5
+			sound:Play()
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(sound, 3)
+			local spike = game.ServerStorage.Assets.Trident.Spike:Clone()
+			spike.Parent = game.Workspace.Thrown
+			spike.Position = eroot.Position+Vector3.new(math.random(-5,5),-10,math.random(-5,5))
+			spike.CFrame = CFrame.lookAt(spike.Position,eroot.Position)
+			spike.Orientation = spike.Orientation + Vector3.new(-80,0,0)
+			spike.ParticleEmitter:Emit(10)
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(spike,0.6)
+			TweenService:Create(spike,TweenInfo.new(0.4),{CFrame=spike.CFrame*CFrame.new(0,spike.Size.Y,0),Transparency = 1}):Play()
+			if i == 5 then
+				game.ServerStorage.Requests.TagHumanoid:Fire(character,enemy,{physical = true,spear = true,slash = true,damage = 5,knockback = true})
+			else
+				game.ServerStorage.Requests.TagHumanoid:Fire(character,enemy,{physical = true,spear = true,slash = true,damage = 3, noenchant = true})
+			end
+			task.wait(waittime)
+		end
+	end
+	if info.damage and enemy and enemy:FindFirstChild("Hardened") then
+		info.damage /= 5
+	end
+	if enemy:FindFirstChild("BloodTieMaster") then
+		for i,v in ipairs(workspace.Live:GetDescendants()) do
+			if v.Name == "BloodTied" and enemy.Name == v.Value  then
+				ehumanoid = v.Parent.Humanoid
+				if game.Players:FindFirstChild(v.Parent.Name) then
+					enemydata = game.ServerStorage.PlayerData[v.Parent.Name]
+					EnemyPlayer = game.Players:GetPlayerFromCharacter(v.Parent)
+				else
+					enemydata = nil
+					EnemyPlayer = nil
+				end
+			end
+		end
+	end
+	if info.death and not FindFirstChild(enemy, "CurseBlocking")then
+		coroutine.wrap(function()
+			for i,v in pairs(enemy:GetChildren()) do
+				if v:IsA("Shirt") or v:IsA("Pants") then
+					v:Destroy()
+				end
+				if v:IsA("Part") or v:IsA("BasePart") then
+					local dec = v:FindFirstChildOfClass("Decal")
+					if dec then
+						dec:Destroy()
+					end
+					local bv = Instance.new("BodyVelocity")
+					game.CollectionService:AddTag(bv,"AllowedBM")
+					bv.Velocity = Vector3.new(math.random(-10,10),math.random(-10,10),math.random(-10,10))
+					bv.Parent = v
+					v.Material = Enum.Material.Neon
+					local tweenInfo02 = TweenInfo.new(1.25,	Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+					local tween02 = TweenService:Create(v,tweenInfo02,{Transparency=1,Color=Color3.new()})
+					tween02:Play()
+				end
+				_G.Death(enemy,character,true);
+			end
+		end)()
+		return
+	end
+	if info.bardragdoll and not FindFirstChild(enemy, "CurseBlocking") then
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+		CollectionService:AddTag(bv,"AllowedBM")
+		bv.Velocity = enemy.HumanoidRootPart.CFrame.lookVector.unit * -60
+		bv.Parent = eroot
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(bv, 0.5)
+	end
+	if info.VentRagdoll and not FindFirstChild(enemy,"Blocking") then
+		bodyvelocitycheck(enemy)
+		create("Action", 1.15, enemy)
+		create("Knocked", 1.15, enemy)
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+		CollectionService:AddTag(bv,"AllowedBM")
+		bv.Velocity = enemy.HumanoidRootPart.CFrame.lookVector.unit * -45
+		bv.Parent = eroot
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(bv, 0.5)
+	end
+	if info.percent then
+		info.damage = enemy.Humanoid.MaxHealth/100 * info.percent
+	end
+	if info.SlamRagdoll then
+		create("Knocked",1.3,enemy)
+	end
+	if info.blacksmithfreeze and not (FindFirstChild(enemy, "CurseBlocking")) and not FindFirstChild(enemy, "CounterSpell") then
+		create("Knocked", 1.5, enemy)
+		commands.StopBurn(enemy)
+		local icecase = game.ServerStorage.SpellEffects.FireWhip.IceCase:Clone()
+		icecase.CFrame = eroot.CFrame
+		icecase.Weld.Part0 = eroot
+		icecase.Weld.Part1 = icecase
+		icecase.Parent = enemy
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(icecase,1.5)
+		local bv = Instance.new("BodyVelocity")
+		CollectionService:AddTag(bv,"AllowedBM")
+		bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+		bv.Parent = eroot
+		bv.Velocity = eroot.CFrame.lookVector.unit * -60
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(bv, 0.5)
+		task.delay(1.5, function()
+			for i,v in pairs(enemy:GetChildren()) do
+				if v.Name == "WakingUp" then
+					task.wait()
+					v:Destroy()
+				end
+			end
+			local slowdown = Instance.new("NumberValue")
+			slowdown.Value = -10
+			slowdown.Name = "SpeedBoost"
+			slowdown.Parent = enemy.Boosts
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(slowdown,3)
+			create("Knocked", 2, enemy)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Parent = eroot
+			bv.Velocity = eroot.CFrame.lookVector.unit * -40
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv, 0.5)
+			game.ServerStorage.Requests.TagHumanoid:Fire(character, enemy, {damage = 10, physical = true, noenchant = true,})
+		end)
+	elseif info.blacksmithfreeze and (FindFirstChild(enemy, "CurseBlocking")) and not FindFirstChild(enemy, "CounterSpell") then
+		info.damage = 0
+		local icecase = game.ServerStorage.SpellEffects.FireWhip.IceCase:Clone()
+		icecase.CFrame = eroot.CFrame
+		icecase.Weld.Part0 = eroot
+		icecase.Weld.Part1 = icecase
+		icecase.Parent = enemy
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(icecase,1.5)
+		task.delay(1.5, function()
+			for i,v in pairs(enemy:GetChildren()) do
+				if v.Name == "WakingUp" then
+					task.wait()
+					v:Destroy()
+				end
+			end
+			if not FindFirstChild(enemy, "CurseBlocking") then
+				local slowdown = Instance.new("NumberValue")
+				slowdown.Value = -10
+				slowdown.Name = "SpeedBoost"
+				slowdown.Parent = enemy.Boosts
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(slowdown,12.5)
+				create("Knocked", 2, enemy)
+				local bv = Instance.new("BodyVelocity")
+				CollectionService:AddTag(bv,"AllowedBM")
+				bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+				bv.Parent = eroot
+				bv.Velocity = eroot.CFrame.lookVector.unit * -40
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(bv, 0.3)
+				game.ServerStorage.Requests.TagHumanoid:Fire(character, enemy, {damage = 10, physical = true, noenchant = true,})
+			end
+		end)
+	elseif info.blacksmithfreeze and FindFirstChild(enemy, "CounterSpell") then
+		enemy = character
+		eroot = character.HumanoidRootPart
+		create("Knocked", 1.5, enemy)
+		for i,v in pairs(enemy:GetChildren()) do
+			if v.Name == "WakingUp" then
+				task.wait()
+				v:Destroy()
+			end
+		end
+		commands.StopBurn(enemy)
+		local icecase = game.ServerStorage.SpellEffects.FireWhip.IceCase:Clone()
+		icecase.CFrame = eroot.CFrame
+		icecase.Weld.Part0 = eroot
+		icecase.Weld.Part1 = icecase
+		icecase.Parent = enemy
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(icecase,1.5)
+		local bv = Instance.new("BodyVelocity")
+		CollectionService:AddTag(bv,"AllowedBM")
+		bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+		bv.Parent = eroot
+		bv.Velocity = eroot.CFrame.lookVector.unit * -60
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(bv, 0.3)
+		task.delay(1.5, function()
+			create("Knocked", 2, enemy)
+			local slowdown = Instance.new("NumberValue")
+			slowdown.Value = -10
+			slowdown.Name = "SpeedBoost"
+			slowdown.Parent = enemy.Boosts
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(slowdown,12.5)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+			bv.Parent = eroot
+			bv.Velocity = eroot.CFrame.lookVector.unit * -40
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv, 0.3)
+			game.ServerStorage.Requests.TagHumanoid:Fire(character, enemy, {damage = 10, physical = true, noenchant = true,})
+		end)
+	end
+	if enemy:FindFirstChild("FlowingParry")and not(enemy == character)and not character:FindFirstChild("MonsterInfo") then
+		if (enemy and enemy:FindFirstChild("Flowing Counter")) or (EnemyPlayer and EnemyPlayer.Backpack:FindFirstChild("Flowing Counter")) then
+			local Action = FindFirstChild(enemy,"HeavyAttack")
+			local Stun = FindFirstChild(enemy, "Action")
+			commands.StopBurn(enemy)
+			local anim = enemy.Humanoid:LoadAnimation(FlowingParry)
+			anim:Play()
+			if Action then
+				task.wait()
+				Action:Destroy()
+			end
+			if Stun then
+				task.wait()
+				Stun:Destroy()
+			end
+			local damage = 2
+			if info.damage then
+				damage = damage
+			end
+			info = {damage = damage/2, physical = true, manabreaker = true, slash = true, blade = true, noenchant = true}
+			enemy = character
+			enemydata = playerdata
+			EnemyPlayer = Player
+			ehumanoid = humanoid
+			eroot = root
+		else
+			for _,v in enemy:GetChildren() do
+				if v.Name == "FlowingParry" then
+					v:Destroy()
+				end
+			end
+		end
+	end
+	if playerdata and CheckRace(playerdata, "NecoSpirit") and root and info.physical then
+		local necoSound = root:FindFirstChild("necohit".. math.random(1,6))
+
+		if necoSound then
+			local soundClone = necoSound:Clone()
+			soundClone.Parent = necoSound.Parent
+
+			soundClone.Ended:Once(function()
+				soundClone:Destroy()
+			end)
+			soundClone:Play()
+		end
+	end
+	if enemy:FindFirstChild("FocusParry")and not(enemy == character)and not character:FindFirstChild("MonsterInfo") and not info.nofocusparry and info.physical then
+		local Assets = game.ServerStorage.Assets
+		local Action = FindFirstChild(enemy,"HeavyAttack")
+		local Stun = FindFirstChild(enemy, "Action")
+		local Stun2 = FindFirstChild(enemy, "Stun")
+		local damage = 2
+		if info.damage then
+			damage = damage/2
+		end
+		if Action then
+			task.wait()
+			Action:Destroy()
+		end
+		if Stun then
+			task.wait()
+			Stun:Destroy()
+		end
+		if Stun2 then
+			task.wait()
+			Stun2:Destroy()
+		end
+		info = {damage = damage, fist = true, physical = true, manabreaker = true}
+		enemy = character
+		enemydata = playerdata
+		EnemyPlayer = Player
+		ehumanoid = humanoid
+		eroot = root
+		local Stun = Instance.new("Accessory")
+		Stun.Name = "Stun"
+		Stun.Parent = enemy
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(Stun, 1.4)
+		root.Counter:Play()
+		root.counterparticle:Emit(50)
+		game.ReplicatedStorage.Requests.ScreenFlip:FireClient(Player)
+	end
+
+	if enemy:FindFirstChild("Parry") and enemydata.Enchant.Value == "Providence" and not character:FindFirstChild("MonsterInfo") and not info.noparry and info.physical then
+
+		local v4 = Instance.new("Accessory")
+		v4.Name = "Action"
+		v4.Parent = character
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(v4,0.35)
+
+		local Sound = game.ReplicatedStorage.Assets.PARRIEDSOUND:Clone()
+		Sound.Parent = enemy["HumanoidRootPart"]
+		Sound:Play()
+		Sound.PlaybackSpeed = math.random(8,11)/10
+		game.Debris:AddItem(Sound,1.1)
+
+		if enemy then
+			for i,v in pairs(game.ServerStorage.Assets.EpicParryPart.Attach:children()) do
+				if v:IsA("ParticleEmitter") then
+					local Particle = v:Clone()
+					Particle.Parent = enemy["Right Arm"]
+					Particle:Emit(tonumber(Particle.Name))
+					game.Debris:AddItem(Particle,1.5)
+				end
+			end
+			local anims = game.ReplicatedStorage.CombatAnims.Parry:GetChildren()
+			local randomIndex = math.random(1, #anims)
+			local ParryAnimation = ehumanoid:LoadAnimation(anims[randomIndex])
+			ParryAnimation:Play()
+		end
+
+		return
+	end
+	if enemy:FindFirstChild("FULLPARRY") and not character:FindFirstChild("MonsterInfo") and info.physical and not info.subzero and not info.injury and not info.fist then 
+		if (enemy and enemy:FindFirstChild("Counter")) or (EnemyPlayer and EnemyPlayer.Backpack:FindFirstChild("Counter")) then
+			local Action = FindFirstChild(enemy,"HeavyAttack")
+			local Stun = FindFirstChild(enemy, "Action")
+			create("FULLPARRY",0.25, enemy)
+			local Assets = game.ServerStorage.Assets
+
+			if Action then
+				task.wait()
+				Action:Destroy()
+			end
+			if Stun then
+				task.wait()
+				Stun:Destroy()
+			end
+			enemy = character
+			enemydata = playerdata
+			EnemyPlayer = Player
+			ehumanoid = humanoid
+			eroot = root
+		end
+		for _,v in enemy:GetChildren() do
+			if v.Name == "FULLPARRY" then
+				v:Destroy()
+			end
+		end
+	end
+
+	if character:FindFirstChild('Windup') and info.isweaponm1only and playerdata.Resonance.Value == 'Windup' then
+		local HitSound = character['HumanoidRootPart']:FindFirstChild("PunchHit")
+		local WindupAmount = character:FindFirstChild('Windup').Value
+		if not WindupAmount then
+			return
+		end
+		local TrueDamage = 30*(WindupAmount/5)
+		if HitSound then
+			HitSound:Play()
+		end
+
+		for _,v in pairs(enemy:GetDescendants()) do
+			if v:IsA("BodyVelocity") then
+				v:Destroy()
+			end
+		end
+
+		game.ReplicatedStorage.Requests.ClientEffect:FireAllClients("WindupHit", {character})
+
+		for i,v in pairs((character["Right Arm"] or character["RightLowerArm"]):GetChildren()) do if v.ClassName == "ParticleEmitter" then v:Destroy() end end
+		game.ServerStorage.Requests.TagHumanoid:Fire(character,enemy,{physical = true,damage = TrueDamage,strongknockback = true,fist = true})
+
+
+
+		character['Windup']:Destroy()
+		create("Cooldown",15,character["Resonance"])
+
+	end
+	
+	if enemy:FindFirstChild("Weakness") and info.damage and info.damage > 0 then
+		info.damage *= 2
+	end
+	if character:FindFirstChild("Weakness") and info.damage and info.damage > 0 then
+		info.damage /= 2
+	end
+	if enemy:FindFirstChild("Verdiened") then
+		info.damage *= 0.75
+	end
+	if enemy:FindFirstChild("ArcWarder") then
+		info.damage *= 0.35
+	end
+	if enemy:FindFirstChild("GlowArmor") then
+		info.damage *= 0.85
+	end
+	if enemy:FindFirstChild("Lordsbaned") and info.damage then
+		info.damage /= 2
+	end
+	if character:FindFirstChild("Lordsbaned") and info.damage then
+		info.damage *= 1.75
+	end
+	if character.Boosts:FindFirstChild("MeleeDamageMultiplier") and info.damage and info.physical and not info.snarvin then
+		if info.lowerruneboost then
+			info.damage *= (character.Boosts.MeleeDamageMultiplier.Value/3)
+		else
+			for _,v in character.Boosts:GetChildren() do
+				if v.Name == "MeleeDamageMultiplier" and v:IsA("NumberValue") then 
+					info.damage *= v.Value
+				end
+			end
+		end
+	end
+	if enemy:FindFirstChild("HyperArmor") and info.damage then
+		if CheckRace(enemydata, "Metascroom") or enemy.Boosts:FindFirstChild("HyperBuff") then
+			info.damage /= 2.5
+		elseif enemy:FindFirstChild("HyperArmor") then
+			info.damage /= 1.5
+		end
+	end
+	if info.undead then
+		if enemy:FindFirstChild("Knocked") and enemy:FindFirstChild("Unconscious") and not enemy:FindFirstChild("MonsterInfo") then
+			info.executes = true
+			local v11 = game.ServerStorage.Requests.SpawnMonster:Invoke("Shrieker", enemy.HumanoidRootPart.Position, character, true);
+			local v12 = game.ServerStorage.Assets.Dark:Clone();
+			v12.CFrame = v11.Torso.CFrame;
+			v12.Parent = workspace.Thrown;
+			if enemydata.DaysSurvived.Value < 3 then
+				local v123 = Instance.new("Accessory")
+				v123.Name = "Summoned"
+				v123.Parent = v11
+			end
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(v12, 2);
+			v12.Sound:Play();
+			v12.Attachment.OrbParticle:Emit(100);
+			TweenService:Create(v12, TweenInfo.new(0.75, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 0, false), {
+				Size = Vector3.new(10.05, 10.05, 10.05)
+			}):Play();
+			_G.Death(EnemyPlayer, Player)
+
+			
+			pcall(function() -- too lazy to test
+			local PlayerData = game.ServerStorage.PlayerData[Player.Name]
+
+
+			local vdata = game.ServerStorage.PlayerData:FindFirstChild(EnemyPlayer.Name)
+			if vdata then
+
+				if vdata.Class.Value ~= "" then
+					PlayerData.ResGrip.Value = true
+				end
+				PlayerData.Alignment.Value -= 2
+
+				local ChaoticM = Player:FindFirstChild("ChaoticMission")
+				if ChaoticM and ChaoticM.Value == EnemyPlayer then
+					local PlayersHouse = vdata.LastName.Value
+					if PlayersHouse == PlayerData.LastName.Value then
+						PlayerData.HouseBounties.Value += 1
+					end
+
+					ChaoticM:Destroy()
+					local FinishedChaoticMission = Instance.new("Accessory")
+					FinishedChaoticMission.Name = "FinishedChaoticMission"
+					FinishedChaoticMission.Parent = Player
+				end
+			end
+			end)
+		end
+	end
+	if info.disarm and not FindFirstChild(enemy, "CurseBlocking") and not enemy:FindFirstChild("Parry") then
+		if enemy:FindFirstChildOfClass("Tool") and ((enemy:FindFirstChildOfClass("Tool"):FindFirstChild("Skill") and enemy:FindFirstChildOfClass("Tool"):FindFirstChild("RequiresWeapon")) or enemy:FindFirstChildOfClass("Tool"):FindFirstChild("PrimaryWeapon"))  then
+			create("Disarmed", 0.5, enemy)
+			if info.knockondisarm then
+				create("Knocked", info.knockondisarm, enemy)
+				local bv = Instance.new("BodyVelocity")
+				CollectionService:AddTag(bv, "AllowedBM")
+				bv.MaxForce = Vector3.new(1000000000, 0, 1000000000)
+				bv.Velocity = eroot.CFrame.lookVector.unit * -20
+				bv.Parent = enemy
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(bv, 0.25)
+			end
+		end
+	end
+	if not enemy:FindFirstChild("MonsterInfo") and enemydata and enemydata.Injuries.Value:find("chestgash") and info.damage and info.physical then
+		info.damage *= 1.18
+	end
+	if info.injury and info.injury == "rib cage" and not blocking then
+		create("Knocked", 1, enemy)
+		if not enemy:FindFirstChild("MonsterInfo") and not enemydata.Injuries.Value:find(info.injury) then												
+			enemydata.Injuries.Value ..= ",BrokenRib"
+		end
+	elseif blocking and info.injury and info.injury == "rib cage" then
+		create("Knocked", 1, character)
+		enemy = character
+		ehumanoid = humanoid
+		eroot = root
+		EnemyPlayer = Player
+		enemydata = playerdata
+	end
+	if info.injury and info.injury == "lungs" and not blocking then
+		if not enemy:FindFirstChild("MonsterInfo") then
+			local slowdown = Instance.new("NumberValue")
+			slowdown.Value = -6
+			slowdown.Name = "SpeedBoost"
+			slowdown.Parent = enemy.Boosts
+			_G.Debris:AddItem(slowdown,7)
+			local nodash = Instance.new("Accessory")
+			nodash.Name = "nodashshadow"
+			nodash.Parent = enemy
+			_G.Debris:AddItem(nodash,7)
+			eroot.Bonebreak:Play()
+		end
+	end
+	if info.azaelcheck then
+		if info.burn and not enemy:FindFirstChild("MonsterInfo") and enemydata and (CheckRace(enemydata, 'Azael')) then
+			info.burn = false
+			info.fakeburn = true
+			if info.damage then
+				info.damage += .75
+			end
+			if info.dsagem2 then
+				info.cancelsmana = false
+			end
+		end
+	end
+	if info.injury and info.injury == "heat" and info.damage and not enemy:FindFirstChild("MonsterInfo") and not enemydata.Injuries.Value:find(info.injury) then
+		enemydata.Injuries.Value = enemydata.Injuries.Value..",heat"
+		if not enemy:FindFirstChild("SpellBlocking") then
+			create("Knocked", 2, enemy)
+			local bod = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bod, "AllowedBM")
+			bod.MaxForce = Vector3.new(50000, 30, 50000)
+			bod.Velocity = eroot.CFrame.lookVector.unit * -40
+			bod.Velocity += Vector3.new(0, 25, 0)
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bod, 0.5)
+		end
+	end
+	if not enemy:FindFirstChild("MonsterInfo") and enemydata and enemydata.Injuries.Value:find("heat") and info.damage then
+		info.damage = info.damage * 1.2
+	end
+	if FindFirstChild(enemy,"Awakening")then
+		if not info.falldamage and not info.nododge and not info.blockbreak and not info.strongknockback and not (info.curse) and not (info.mana) or (info.mana and info.sunlight) or (info.mana and info.snarvin) then
+			local awakening = enemy.Awakening
+			if awakening.Value>0 then
+				awakening.Value-=1
+				if awakening.Value == 0 then
+					awakening.Parent = nil
+					task.spawn(function()
+						wait(1)
+						if awakening and awakening.Parent then
+							awakening:Destroy()
+						end
+					end)
+				end
+				create("NoDam",0.3,enemy)
+				local dodgeanim = ehumanoid:LoadAnimation(script["Dodge"..math.random(1,2)])
+				dodgeanim:Play()
+				return
+			end
+		end
+	end
+	if EnemyPlayer and enemy:FindFirstChild("CantDodge") == nil and enemydata.EdictType.Value == "SeerA" and enemy:FindFirstChild("SeerFlip") and enemydata.DaysSurvived.Value >= 3 and not info.falldamage and not info.mana and not info.sunlight  and not info.curse then
+		if not (info.mana and info.sunlight) then
+			local ts = game:GetService("TweenService")
+			if enemy:FindFirstChild("SeerFlip").Value == true then
+				local cddodge = Instance.new("Accessory", enemy)
+				cddodge.Name = "CantDodge"
+				task.spawn(function()
+					task.wait(90)
+					cddodge:Destroy()
+
+					if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+						if enemy.HumanoidRootPart:FindFirstChild("SilverDischarge") then
+							enemy.HumanoidRootPart["SilverDischarge"]:Play()
+						end
+					end
+
+					local billboard = game:GetService("ReplicatedStorage").Assets.XarStuff.SeerBillboard:Clone()
+					billboard.Parent = enemy.Head
+					ts:Create(billboard.ImageLabel, TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, true), {ImageTransparency = 0}):Play()
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(billboard, 2)
+				end)
+				create("NoDam",0.1,enemy)
+				create("IFRAME",1.2,enemy)
+				enemy.Humanoid.AutoRotate = false
+				local nofall = Instance.new("Accessory", enemy)
+				nofall.Name = "NoFall"
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(nofall, 5)
+				enemy.Humanoid:LoadAnimation(game:GetService("ReplicatedStorage").Assets.XarStuff.SeerEvasive):Play()
+				local bv = Instance.new("BodyVelocity")
+				CollectionService:AddTag(bv, "AllowedBM")
+				bv.Parent = enemy.HumanoidRootPart
+				bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+				bv.Velocity = enemy.HumanoidRootPart.CFrame.lookVector * -65
+				local sound = game:GetService("ReplicatedStorage").Assets.XarStuff.SeerEvasiveSound:Clone()
+				sound.Parent = enemy.HumanoidRootPart
+				sound:Play()
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(sound, 5)
+				local highlight = Instance.new("Highlight")
+				highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+				highlight.FillTransparency = 1
+				highlight.OutlineTransparency = 1
+				highlight.Parent = enemy
+				highlight.FillColor = Color3.fromRGB(255,255,255)
+				local billboard = game:GetService("ReplicatedStorage").Assets.XarStuff.SeerBillboard:Clone()
+				billboard.Parent = enemy.Head
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(highlight, 5)
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(billboard, 5)
+				ts:Create(highlight, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, true), {OutlineTransparency = 0}):Play()
+				ts:Create(billboard.ImageLabel, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, true), {ImageTransparency = 0}):Play()
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(bv, 0.7)
+				task.spawn(function()
+					local velocity = 65
+					for i = 1,50 do
+						bv.Velocity = enemy.HumanoidRootPart.CFrame.lookVector * -velocity
+						velocity -= 0.5
+						task.wait()
+					end
+					enemy.Humanoid.AutoRotate = true
+				end)
+				return
+			elseif enemy:FindFirstChild("SeerFlip").Value == false and not info.falldamage and not info.nododge and not info.blockbreak and not info.strongknockback and not (info.curse) and not (info.mana) or (info.mana and info.sunlight) or (info.mana and info.snarvin) and not info.mana and not info.sunlight then
+				local cddodge = Instance.new("Accessory", enemy)
+				cddodge.Name = "CantDodge"
+				task.spawn(function()
+					task.wait(60)
+					cddodge:Destroy()
+					enemy.HumanoidRootPart.SilverDischarge:Play()
+					local billboard = game:GetService("ReplicatedStorage").Assets.XarStuff.SeerBillboard:Clone()
+					billboard.Parent = enemy.Head
+					ts:Create(billboard.ImageLabel, TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, true), {ImageTransparency = 0}):Play()
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(billboard, 2)
+				end)
+				create("NoDam",0.1,enemy)
+				create("IFRAME",1,enemy)
+				enemy.Humanoid:LoadAnimation(game:GetService("ReplicatedStorage").Assets.XarStuff.SeerSidestep):Play()
+				local sound = game:GetService("ReplicatedStorage").Assets.XarStuff.SeerEvasiveSound:Clone()
+				sound.Parent = enemy.HumanoidRootPart
+				sound:Play()
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(sound, 5)
+				local highlight = Instance.new("Highlight")
+				highlight.FillTransparency = 1
+				highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+				highlight.OutlineTransparency = 1
+				highlight.Parent = enemy
+				highlight.FillColor = Color3.fromRGB(255,255,255)
+				local billboard = game:GetService("ReplicatedStorage").Assets.XarStuff.SeerBillboard:Clone()
+				billboard.Parent = enemy.Head
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(highlight, 5)
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(billboard, 5)
+				ts:Create(highlight, TweenInfo.new(0.8, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, true), {OutlineTransparency = 0}):Play()
+				ts:Create(billboard.ImageLabel, TweenInfo.new(0.8, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, true), {ImageTransparency = 0}):Play()
+				return
+			end
+		end
+	end
+	if info.duration then
+		print(info.duration)
+	end
+	if info.blade and info.damage then
+		if EnemyPlayer and EnemyPlayer.Backpack:FindFirstChild("SlashResistance") then
+			if info.damage then
+				info.damage = info.damage/100 * 75
+			end
+		end
+	end
+	if info.damage then
+		if enemy:FindFirstChild("IronRes") then
+			info.damage /= 3
+			soundplay(eroot, "MetalClash")
+			eroot.Sparks:Emit(10)
+		end
+	end
+	if info.sprintelegant then
+		if (blocking or FindFirstChild(enemy,"SpellBlocking")) then
+			print("Blocking")
+			game.ReplicatedStorage.Requests.ClearDodgeVels:FireClient(Player)
+			if character:FindFirstChild("Stun") == nil then
+				create("Stun",2.5,character)
+			end	
+		else
+			task.delay(0.5,function()
+				if character:FindFirstChild("Stun") ~= nil then
+					character:FindFirstChild("Stun"):Destroy()
+				end
+			end)
+		end
+	end
+	if EnemyPlayer and enemydata and CheckRace(enemydata, 'Scroom') and not info.falldamage then
+		if enemy:FindFirstChild("HitsTaken") == nil then
+			local count = Instance.new("NumberValue")
+			count.Name = "HitsTaken"
+			count.Value = 0
+			count.Parent = enemy
+			local timer = Instance.new("StringValue")
+			timer.Name = "LastHit"
+			timer.Value = tick()
+			timer.Parent = count
+		end
+		if tick() - enemy.HitsTaken.LastHit.Value >= 5 then
+			enemy.HitsTaken.Value = 0
+		end
+		enemy.HitsTaken.LastHit.Value = tick()
+		enemy.HitsTaken.Value += 1
+		if enemy.HitsTaken.Value >= 5 and enemy:FindFirstChild("CopeCD") == nil then
+			local cd = Instance.new("Accessory")
+			cd.Name = "CopeCD"
+			cd.Parent = enemy
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(cd, 50)
+			create("NoDam",0.2,enemy)
+			create("IFRAME",0.2,enemy)
+			local SpraySound = game:GetService("ServerStorage").RacialAbilities.Detoxify.Script.SprayS:Clone()
+			local SprayPart = game:GetService("ServerStorage").RacialAbilities.Detoxify.Script.SprayP:Clone()
+			SprayPart.Parent = enemy:WaitForChild("Head")
+			SprayPart.Enabled = true
+			SpraySound.Parent = enemy:WaitForChild("HumanoidRootPart")
+			SpraySound:Play()
+			task.delay(0.7, function()
+				SprayPart.Enabled = false
+			end)
+			for _,v in ipairs(game.Workspace.Live:GetChildren()) do
+				if v.Name ~= enemy.Name and v:FindFirstChild("HumanoidRootPart") and (v.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude <= 14 then
+					local loool = {
+						physical = true,
+						fist = true,
+						knockback = true,
+						manaknockupself = true, 
+						poison = true, 
+						bypassblock = true,
+						ignoreblock = true,
+						damage = 10
+					}
+					game.ServerStorage.Requests.TagHumanoid:Fire(enemy,v, loool)
+				end
+			end
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(SpraySound, 1.5)
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(SprayPart, 1.5)
+		end
+	end
+	if info.revenge then
+		if blocking then
+			game.ReplicatedStorage.Requests.ClearDodgeVels:FireClient(Player)
+			create("Stun",1,character)	
+		end
+	end
+	if info.spinm2 then
+		if blocking then
+			game.ReplicatedStorage.Requests.ClearDodgeVels:FireClient(Player)
+			create("Stun",2,character)	
+		end
+	end
+	if info.legbreaker then
+		if EnemyPlayer.Backpack:FindFirstChild("IronBody") and blocking then
+			soundplay(eroot,"BlockSound")
+			eroot.BlockParticle:Emit(1)
+			print("enemyisblocking and has ironbody")
+			
+			if character:FindFirstChild("WeakLeg") then 
+				if not playerdata.Injuries.Value:find("brokenleg") then
+					playerdata.Injuries.Value = playerdata.Injuries.Value..",brokenleg"
+					root.Injury:Play()
+					root.Bonebreak:Play()
+					local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+					injury.Parent = root
+					injury:Emit(3)
+					_G.Debris:AddItem(injury,1.5)
+					create("Knocked", 1, character)
+					create("InjuryCooldown",1,character)
+					
+					task.spawn(function()
+						task.wait(12)
+						playerdata.Injuries.Value = playerdata.Injuries.Value:gsub(",brokenleg","")
+						if character:FindFirstChild('WeakLeg') then
+							character['WeakLeg']:Destroy()
+						end
+					end)
+					
+					return
+				end	
+			else
+				create("Knocked", 1, character)
+				create("WeakLeg",false,character)
+				return
+			end
+		end
+		
+		if enemy:FindFirstChild("WeakLeg") then
+			if not enemydata.Injuries.Value:find("brokenleg") then 
+				enemydata.Injuries.Value = enemydata.Injuries.Value..",brokenleg"
+				eroot.Injury:Play()
+				eroot.Bonebreak:Play()
+				local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+				injury.Parent = eroot
+				injury:Emit(3)
+				_G.Debris:AddItem(injury,1.5)
+				create("Knocked", 1, enemy)
+				create("InjuryCooldown",1,enemy)
+				
+				task.spawn(function()
+					task.wait(12)
+					enemydata.Injuries.Value = enemydata.Injuries.Value:gsub(",brokenleg","")
+					if enemy:FindFirstChild('WeakLeg') then
+						enemy['WeakLeg']:Destroy()
+					end
+				end)
+				
+			else
+				create("InjuryCooldown",1,enemy)
+			end
+		else
+			create("WeakLeg",false,enemy)
+		end
+	end
+	if info.mana then
+		if FindFirstChild(enemy,"SpellBlocking")and not info.manabreaker and not info.curse then
+			eroot.SpellBlock:Play()
+			if enemy == character then
+				local ac = FindFirstChild(character, "Action")
+				local ha = FindFirstChild(character, "HeavyAttack")
+				if ha then
+					ha:Destroy()
+				end
+				if ac then
+					ac:Destroy()
+				end
+			end
+			create("ChargeBlock", 0.85, enemy)
+			if character.Head.Transparency ~= 1 then
+				eroot.Orb.Transparency = 0
+				TweenService:Create(eroot.Orb,TweenInfo.new(0.5),{Transparency = 0.75}):Play()
+			end
+			return
+		end
+		if FindFirstChild(enemy, "MonShield") and not info.monkbreaker and not info.sunlight then
+			return
+		end
+		if (info.curse or info.tsc) and FindFirstChild(enemy, "MonShield") and not info.blockbreak then return end
+		if info.curse and FindFirstChild(enemy,"CurseBlocking")then
+			return
+		end
+		if info.burn and not enemy:FindFirstChild("MonsterInfo") and enemydata and (CheckRace(enemydata, 'Azael') or CheckRace(enemydata, 'Hiveborn'))  then
+			if not info.manus and not info.snapignis then
+				return
+			end
+		end
+		if info.freeze and enemydata and CheckRace(enemydata, 'Dracula') then
+			return
+		end
+		if info.rubyshard and enemy:FindFirstChild("RubyShardCD") then
+			return
+		else
+			create("RubyShardCD", 0.8, enemy)
+		end
+		if info.disease then
+			create(info.disease, 180, enemy)
+		end
+		if info.sunlight then
+			create("NoDam", 0.2, enemy)
+		end
+
+		if info.torture2 and not enemy:FindFirstChild("MonsterInfo") then
+			local injuries = {"brokenleg", "brokenarm", "heat", "chestgash", "Frostbite", "blind", "dizzy"}
+			local choseninjury = nil
+			for i = 1,#injuries do
+				if not enemydata.Injuries.Value:find(injuries[i]) then
+					choseninjury = injuries[i]
+				end
+			end
+			if choseninjury then
+				enemydata.Injuries.Value ..= ","..choseninjury
+				if not enemy:FindFirstChild("InjuryCooldown") then
+					eroot.Injury:Play()
+					local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+					injury.Parent = eroot
+					injury:Emit(3)
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(injury,1.5)
+					local f = Instance.new("Accessory") f.Name = "InjuryCooldown" f.Parent = enemy if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(f,1)
+				end
+			end
+			return
+		end
+		if info.torture and not enemy:FindFirstChild("MonsterInfo") then
+			local injuries = {"brokenleg", "brokenarm", "heat", "chestgash", "Frostbite", "blind", "dizzy"}
+			local choseninjury = nil
+			for i = 1,#injuries do
+				if not enemydata.Injuries.Value:find(injuries[i]) then
+					choseninjury = injuries[i]
+				end
+			end
+			if choseninjury then
+				enemydata.Injuries.Value ..= ","..choseninjury
+				info.injury = true
+			end
+			local bv = Instance.new("BodyVelocity")
+			game.CollectionService:AddTag(bv, "AllowedBM")
+			bv.P = 1250
+			bv.MaxForce = Vector3.new(1e+06, 1e+06, 1e+06)
+			bv.Velocity = eroot.CFrame.LookVector.Unit * (math.random(1,2) == 1 and -60 or 60) + Vector3.new(10, 0, 10)
+			bv.Parent = enemy.HumanoidRootPart
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv, 0.5)
+		end
+		if info.curse and FindFirstChild(enemy.Artifacts,"Lannis")and not info.bypasslannis then
+			if  enemy ~= character and playerdata.Race.Value ~= 'Cameo' and playerdata.Race.Value ~= 'Seraph' then -- lannis proc on own moves
+				if (playerdata) then
+					local canLannis = true
+					local Race = playerdata.Race.Value or ""
+					if (playerdata.Race.Value == 'Visorant' or playerdata.Race.Value == 'Hiveborn' or playerdata.Race.Value == 'TrueCameo' or playerdata.Race.Value == 'Visorant2' or playerdata.Race.Value == 'TrueSeraph') and info.burn then
+						canLannis = false
+					end
+					if canLannis and not FindFirstChild(enemy,"LannisCD") then
+						u4.Lannis(enemy)
+						create("LannisCD", 45, character)
+						return
+					end
+				end
+			end
+		end
+		if info.curseblast then
+			if enemy:FindFirstChild("tenebriscd") then return end
+			create("tenebriscd", 5, enemy)
+			require(game.ServerScriptService.Modules.EffectModule)["Lanniseffect3"](enemy)
+		end
+		if info.curseeffect then
+			local curseCount = getCurseCount(enemy)
+			if curseCount < 4 and not enemy.Boosts:FindFirstChild("CurseEffectImmune") then
+				local Cursey = game.ServerStorage.Assets.Cursey:Clone()
+				Cursey.Parent = enemy.HumanoidRootPart
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(Cursey, 30);
+				curseCount += 1
+			end
+		end
+		if info.closemana then
+			create("ContrariumTag", 0.9, enemy)
+			if enemy:FindFirstChild("Charge") then
+				enemy.Charge:Destroy()
+			end
+		end
+		if info.gelidusfreeze and not FindFirstChild(enemy.Artifacts, "Lannis") then
+			knockback = true
+			bodyvelocitycheck(enemy)
+			create("Knocked", 2, enemy)
+			create("GelidusCD", 7, enemy)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1e+06, 1e+06, 1e+06)
+			bv.P = 1250
+			bv.Velocity = eroot.CFrame.lookVector.unit*-40
+			bv.Velocity += Vector3.new(0, 10, 0)
+			bv.Parent = eroot
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv,0.3)
+		elseif info.gelidusfreeze and FindFirstChild(enemy.Artifacts, "Lannis") and FindFirstChild(enemy, "LannisCD") then
+			knockback = true
+			bodyvelocitycheck(enemy)
+			create("Knocked", 2, enemy)
+			create("GelidusCD", 7, enemy)
+			local bv = Instance.new("BodyVelocity")
+			CollectionService:AddTag(bv,"AllowedBM")
+			bv.MaxForce = Vector3.new(1000000,10000000,1000000)
+			bv.Velocity = eroot.CFrame.lookVector.unit*-40
+			bv.Velocity = bv.Velocity + Vector3.new(0, 10, 0)
+			bv.Parent = eroot
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(bv,0.3)
+		end
+		if info.curse and not(enemy == character)and FindFirstChild(enemy,"CounterSpell")then
+			local oldplayer = EnemyPlayer
+			local olddata = enemydata
+			local oldenemy = enemy
+			local oldroot = eroot
+			local oldhumanoid = ehumanoid
+			EnemyPlayer = Player
+			enemydata = playerdata
+			enemy = character
+			eroot = root
+			ehumanoid = humanoid
+			Player = EnemyPlayer
+			playerdata = olddata
+			character = oldenemy
+			root = oldroot
+			humanoid = oldhumanoid
+			info.bypasslannis = true
+		end
+		if info.fimbul then
+			task.spawn(function()
+				local v28 = game.ServerStorage.SpellEffects.GreatWinter.IceCase:Clone()
+				v28.CFrame = enemy.HumanoidRootPart.CFrame
+				v28.Parent = enemy
+				local v29 = Instance.new("Motor6D")
+				v29.Part0 = enemy.Torso
+				v29.Part1 = v28
+				v29.Parent = v28
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(v28, 2)
+				wait(2)
+				game.ServerStorage.Requests.TagHumanoid:Fire(character, enemy, {
+					mana = true, 
+					damage = 12, 
+					manaknockupself = true, 
+					curse = true, 
+					downbypass = true,
+				})
+			end)
+		end
+		if info.vortex then
+			task.spawn(function()
+				game.ServerStorage.Requests.TagHumanoid:Fire(character, enemy, {
+					mana = true, 
+					damage = 10, 
+					manaknockupself = true, 
+					curse = true, 
+					downbypass = true,
+				})
+			end)
+		end
+		if info.manaknockup then
+			if not plantedcheck(enemy)then
+				knockback = true
+				bodyvelocitycheck(enemy)
+				create("Knocked", 2, enemy)
+				local bv = Instance.new("BodyVelocity")
+				CollectionService:AddTag(bv,"AllowedBM")
+				bv.MaxForce = Vector3.new(1e+06, 0, 1e+06)
+				bv.P = 1250
+				bv.Velocity = root.CFrame.lookVector.unit*(knockm+5)
+				bv.Parent = eroot
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(bv,0.5)
+			end
+		end
+		if info.Slam then
+			bodyvelocitycheck(enemy)
+			create("Knocked", 2.5, enemy)
+		end
+		if info.AntiShoulderThrow then --// only add to spells
+			if not enemy:FindFirstChild("AntiShoulderThrow") then
+				local AntiShoulderThrow = Instance.new("Folder")
+				AntiShoulderThrow.Name = "AntiShoulderThrow"
+				AntiShoulderThrow.Parent = enemy
+			end
+		end
+		if info.manaknockupself then
+			if not plantedcheck(enemy) and not enemy:FindFirstChild("SpellBlocking") then
+				knockback = true
+				bodyvelocitycheck(enemy)
+				if not info.tsc then
+					create("Knocked", 2, enemy)
+					local bv = Instance.new("BodyVelocity")
+					CollectionService:AddTag(bv,"AllowedBM")
+					bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+					bv.Velocity = eroot.CFrame.lookVector.unit*-40
+					bv.Velocity = bv.Velocity+Vector3.new(0,20,0)
+					bv.Parent = eroot
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(bv,0.3)
+				else
+					create("Knocked", 2.5, enemy)
+					local bv = Instance.new("BodyVelocity")
+					CollectionService:AddTag(bv,"AllowedBM")
+					bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+					bv.Velocity = eroot.CFrame.lookVector.unit*-40
+					bv.Velocity = bv.Velocity+Vector3.new(0,20,0)
+					bv.Parent = eroot
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(bv,0.3)
+				end
+			end
+		end
+	else
+		if FindFirstChild(enemy,"Awakening")then
+			if not info.falldamage and not info.nododge and not info.blockbreak and not info.strongknockback and not info.curse then
+				local awakening = enemy.Awakening
+				if awakening.Value>0 then
+					awakening.Value-=1
+					if awakening.Value == 0 then
+						awakening.Parent = nil
+						task.spawn(function()
+							wait(1)
+							if awakening and awakening.Parent then
+								awakening:Destroy()
+							end
+						end)
+					end
+					create("NoDam",0.3,enemy)
+					local dodgeanim = ehumanoid:LoadAnimation(script["Dodge"..math.random(1,2)])
+					dodgeanim:Play()
+					return
+				end
+			end
+		end
+	end
+	if info.cursestack then
+		local curseCount = getCurseCount(enemy)
+		if curseCount < 4 and not enemy:FindFirstChild('Blocking') then
+			if enemy.Boosts and not enemy.Boosts:FindFirstChild("CurseEffectImmune") then
+				local Cursey = game.ServerStorage.Assets.Cursey:Clone()
+				Cursey.Parent = enemy.HumanoidRootPart
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(Cursey, 30);
+				curseCount += 1
+			end
+		end
+	end
+	if info.DevStack then
+		local curseCount = getCurseCount(enemy)
+		if curseCount < 7 and not enemy:FindFirstChild('Blocking') then
+			if enemy.Boosts and not enemy.Boosts:FindFirstChild("CurseEffectImmune") then
+				local Cursey = game.ServerStorage.Assets.Clouds:Clone()
+				Cursey.Parent = enemy.HumanoidRootPart
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(Cursey, 70);
+				curseCount += 6
+			end
+		end
+	end
+	if info.grimcurse then
+		local grimcurseCount = getGrimCurse(enemy)
+		if grimcurseCount < 3 and not enemy:FindFirstChild('Blocking') then
+			enemy["HumanoidRootPart"]["GrimScream"]:Play()
+			local Cursey = game.ServerStorage.Assets.GrimCurse:Clone()
+			Cursey.Parent = enemy.HumanoidRootPart
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(Cursey, 10);
+			grimcurseCount += 1
+		end
+	end
+	if info.freeze and not info.subzero then
+		commands.StopBurn(enemy)
+		local Temperature = FindFirstChild(enemy,"Temperature")
+		local icecase = game.ServerStorage.SpellEffects.FireWhip.IceCase:Clone()
+		icecase.CFrame = eroot.CFrame
+		icecase.Weld.Part0 = eroot
+		icecase.Weld.Part1 = icecase
+		icecase.Parent = enemy
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(icecase,1.5)
+		Player = game.Players:GetPlayerFromCharacter(enemy)
+		TemperatureHandler.CHANGE_TEMPERATURE(enemy,-1, 0.1)
+		if not enemy:FindFirstChild("MonsterInfo") and not enemydata.Injuries.Value:find("Frostbite") and Temperature.Value <= -1 then												
+			enemydata.Injuries.Value ..= ",Frostbite"
+			create("Frostbitten",60,enemy)
+			eroot.Injury:Play()
+			local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+			injury.Parent = eroot
+			injury:Emit(2)
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(injury,1.5)
+		end
+		create("BurnCooldown",8,enemy)
+		create("AntiBurn", 9, enemy)
+	end
+	if info.tanjiroburn then
+		local burncolor
+		if FindFirstChild(enemy,"Blocking") then
+			
+		
+		elseif FindFirstChild(enemy,"SpellBlocking") then
+			
+			
+		else	
+			if info.burncolor then
+				burncolor = info.burncolor
+			end
+			if info.damage then
+				info.damage *= 1.2
+				print(info.damage)
+			end
+			commands.StartBurn(enemy,eroot,burncolor,"TanjiroBurn",character)
+		end	
+	end
+	if info.burn then
+		local burncolor
+		if (playerdata) then
+			local Race = playerdata.Race.Value or ""
+			local RaceVariant = playerdata.RaceVariant.Value or ""
+			local isShiny = playerdata.HasExotic.Value or false
+			if Race == "Visorant" or Race == 'Visorant2' then
+				burncolor = Color3.new(0.439216, 0.945098, 0.12549)
+			end
+			if Race == "Hiveborn" then
+				burncolor = Color3.new(1, 1, 1)
+			end
+			if info.KaiBurn then
+				burncolor = Color3.new(0, 0.709804, 0.709804)
+			end
+			if RaceVariant == "BlueAzael" and Race == "Azael" and isShiny then
+				burncolor = Color3.new(0.247059, 0.678431, 0.945098)
+			end
+			if RaceVariant == "PurpleAzael" and Race == "Azael" and isShiny then
+				burncolor = Color3.new(0.54902, 0.321569, 0.945098)
+			end
+		end
+		if info.burncolor then
+			burncolor = info.burncolor
+		end
+
+		local manainfo = {}
+		if info.antimanaburn then
+			manainfo.manastop = true
+		end
+		manainfo.wraithfire = info.wraithfire
+		commands.StartBurn(enemy,eroot,burncolor,manainfo,character)
+	end
+	if info.fakeburn then
+		local partic = game.ServerStorage.Assets.FakeBurn:clone()
+		partic.Parent = enemy.PrimaryPart
+		partic:Emit(30)
+		if not _G.Debris then repeat task.wait() until _G.Debris end
+		_G.Debris:AddItem(partic,1.5)
+		if enemy:FindFirstChild("HumanoidRootPart") then
+			if enemy:FindFirstChild("FakeExtinguish") then
+				enemy.FakeExtinguish:Play()
+			end
+		end
+	end
+	if info.sunlight then
+		if game.CollectionService:HasTag(enemy,"Vampirism") then
+			if not FindFirstChild(enemy,"NoHunger") and enemy.Name ~= "dsad1d1w" then
+				enemy.Stomach.Value = math.clamp(enemy.Stomach.Value-info.sunlight, 0, humanoid.MaxHealth)
+			end
+			if info.mana then
+				commands.StartBurn(enemy,eroot,nil,nil,character)
+				create("NoRegen", 7, enemy)
+				create("AntiVampirism", 7, enemy)
+			end
+		end
+	end
+	if info.changehunger and enemy:FindFirstChild("Stomach") then
+		if not FindFirstChild(enemy,"NoHunger") then
+			enemy.Stomach.Value = math.clamp(enemy.Stomach.Value+info.changehunger, 0, humanoid.MaxHealth)
+		end
+	end
+	if FindFirstChild(enemy,"SilverGuard") and enemydata.Silver.Value > 0 then
+		if not info.nododge and not info.falldamage and info.damage then
+			if enemydata and enemydata.Silver.Value>0 then
+				eroot.SilverEmit:Emit(25)
+				eroot.SilverClash:Play()
+				task.spawn(function()
+					if enemydata.Silver.Value > info.damage/5 then
+						enemydata.Silver.Value -= info.damage/5
+					else
+						enemydata.Silver.Value = 0
+					end
+				end)
+				info.damage = info.damage/100 * 80
+			end
+		end
+	end
+	
+	if FindFirstChild(enemy,"PlayingSong") then
+		if info.damage and info.damage > 0 and not info.nododge then
+			if enemydata and enemydata.Class.Value == "Candence" then
+				info.damage *= 0.8
+			end
+		end
+	end
+
+	if info.nrag ~= nil then
+		anyreturn = create("Knocked", info.nrag, enemy)
+	end
+
+	if enemy:FindFirstChild("HaseldanDamageMultiplier")and info.damage then
+		info.damage /= 1.5
+	end
+
+
+	local Deferred = false
+
+	if info.physical and not info.nohitanim then
+		if blocking and not behind and not info.bypassblock or enemy:FindFirstChild("MonShield") and not info.bypassblock or blocking and info.blockallsides and not info.bypassblock and not FindFirstChild(enemy,"HasGreatswordnorp") then
+			if info.blockbreak then		
+				if enemy:FindFirstChild("Parry") and not info.noparry and enemydata.Enchant.Value ~= "Providence" then
+					local v1 = Instance.new("Accessory")
+					v1.Name = "COUNTERED"
+					v1.Parent = character
+					_G.Debris:AddItem(v1,0.5)
+					local v4 = Instance.new("Accessory")
+					v4.Name = "Action"
+					v4.Parent = character
+					_G.Debris:AddItem(v4,1.2)
+					root.Counter:Play()
+					root.counterparticle:Emit(50)
+					game.ReplicatedStorage.Requests.ScreenFlip:FireClient(Player)
+					wait(0.125)
+					for _,v in pairs(humanoid:GetPlayingAnimationTracks())do
+						v:AdjustSpeed(0)
+					end
+					wait(0.7)
+					for _,v in pairs(humanoid:GetPlayingAnimationTracks())do
+						v:AdjustSpeed(1.5)
+					end
+					return
+				else -- block break
+					if not info.manaexception and not enemy:FindFirstChild("CurseBlocking") then
+						local v1 = Instance.new("Accessory")
+						v1.Name = "Action"
+						v1.Parent = enemy
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(v1,1.25)
+						local v2 = Instance.new("Accessory")
+						v2.Name = "BREAK"
+						v2.Parent = enemy
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(v2,0.75)
+						local v23 = Instance.new("Accessory")
+						v23.Name = "NoDam"
+						v23.Parent = enemy
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(v23,0.75)
+						knockback = true
+						
+						if blocking then
+							blocking:Destroy()
+						end
+						
+						for _,v in pairs(ehumanoid:GetPlayingAnimationTracks())do
+							v:Stop()
+						end
+						
+						soundplay(eroot,"Break")
+					end
+				end
+			else -- blocked
+				local returning = false
+				info.poison = false
+				blocked = true
+
+				if enemy:FindFirstChild("MonShield") then
+					if not info.bypassblock then
+						returning = true
+						if not plantedcheck(enemy) and not info.iselbow and not info.bypassblock and not info.floresco then
+							if character:FindFirstChild("RecentBlockBack") then
+								return
+							end
+							knockback = true
+							bodyvelocitycheck(character)
+							create("Knocked", 2, character)
+							local bv = Instance.new("BodyVelocity")
+							CollectionService:AddTag(bv,"AllowedBM")
+							bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+							bv.Velocity = root.CFrame.lookVector.unit*-35+Vector3.new(0,10,0)
+							bv.Parent = root
+							eroot.SLAMJAM:Play()
+							if not _G.Debris then repeat task.wait() until _G.Debris end
+							_G.Debris:AddItem(bv,0.5)
+							create("ChargeBlock",0.85,enemy)
+							create("RecentBlockBack",0.75,character)
+						end
+					else
+						create("NoDam", 0.6, enemy)
+					end
+				else
+					if not info.slash then
+						soundplay(eroot,"BlockSound")
+						eroot.BlockParticle:Emit(1)
+						returning = true
+						local ac = FindFirstChild(character,"Action")
+						local la = FindFirstChild(character,"ChargeBlock")
+						if la and not la:FindFirstChild("NoDelete") then
+							la:Destroy()
+						end
+						local ha = FindFirstChild(character,"HeavyAttack")
+						if ha and not ha:FindFirstChild("NoDelete") then
+							ha:Destroy()
+						end
+						if ac then
+							local ha = FindFirstChild(character,"HeavyAttack")
+							if ha then
+								ac:Destroy()
+								ha:Destroy()
+							else
+								if not FindFirstChild(ac,"NoDelete")then
+									ac:Destroy()
+								end
+							end
+						end
+
+					else -- slash
+						local w = FindFirstChild(enemy,"HasWeapon")or FindFirstChild(enemy,"IronBody")or false
+						if not w then
+							create("ChargeBlock", 0.85, enemy)
+							info.damage = info.damage / 10
+							soundplay(eroot,"FleshBlock")
+							FindFirstChild(eroot,"BloodHit"):Emit(10)
+
+							local ac = FindFirstChild(character,"Action")
+							local la = FindFirstChild(character,"ChargeBlock")
+							if la and not la:FindFirstChild("NoDelete") then
+								la:Destroy()
+							end
+							local ha = FindFirstChild(character,"HeavyAttack")
+							if ha then
+								ha:Destroy()
+							end
+							if ac then
+								local ha = FindFirstChild(character,"HeavyAttack")
+								if ha then
+									ac:Destroy()
+									ha:Destroy()
+								else
+									if not FindFirstChild(ac,"NoDelete")then
+										ac:Destroy()
+									end
+								end
+							end
+
+						else
+							create("ChargeBlock", 0.85, enemy)
+							soundplay(eroot,"MetalClash")
+							local ss_assets = game.ServerStorage.Assets
+							local ac = FindFirstChild(character,"Action")
+							local la = FindFirstChild(character,"ChargeBlock")
+							local bm = FindFirstChild(EnemyPlayer.Backpack,"LordsTraining")
+							if not info.mana then
+								if bm and enemydata.Weapon.Value == "Sword" and enemy:FindFirstChildOfClass("Tool") and (enemy:FindFirstChildOfClass("Tool"):FindFirstChild("PrimaryWeapon") or (enemy:FindFirstChildOfClass("Tool"):FindFirstChild("Skill") and enemy:FindFirstChildOfClass("Tool"):FindFirstChild("RequiresWeapon"))) then
+									local counter = ehumanoid:LoadAnimation(ss_assets.Sword.FULLPARRY.COUNTER)
+									counter:Play()
+									local countered = humanoid:LoadAnimation(ss_assets.Sword.FULLPARRY.COUNTERED)
+									countered:Play()
+									local action = Instance.new('Accessory')
+									action.Name = "Action"
+									action.Parent = character
+									_G.Debris:AddItem(action,0.3)
+								end
+							end
+							if la and not la:FindFirstChild("NoDelete") then
+								la:Destroy()
+							end
+							local ha = FindFirstChild(character,"HeavyAttack")
+							if ha then
+								ha:Destroy()
+							end
+							if ac then
+								local ha = FindFirstChild(character,"HeavyAttack")
+								if ha then
+									ac:Destroy()
+									ha:Destroy()
+								else
+									if not FindFirstChild(ac,"NoDelete")then
+										ac:Destroy()
+									end
+								end
+							end
+
+							if FindFirstChild(enemy,"HasDagger")then
+								ehumanoid:LoadAnimation(combatanims["DaggerBlockReact"..math.random(1,2)]):Play()
+							end
+							return
+						end
+					end end
+				ehumanoid:LoadAnimation(combatanims["BlockReact"..math.random(1,3)]):Play()
+				if returning then
+					if info.blockallsides then
+						bodyvelocitycheck(enemy)
+					end
+					return
+				end
+			end
+		end
+	end
+	if not enemy:FindFirstChild("MonsterInfo") and enemydata and enemydata.Injuries.Value:find("Frostbite") and info.damage and info.physical then
+		info.damage *= 1.33
+	end
+	if info.injury and info.injury == "dizzy" and not blocked then
+		if not enemy:FindFirstChild("MonsterInfo") and not enemydata.Injuries.Value:find(info.injury) then
+			enemydata.Injuries.Value ..= ",dizzy"
+		end
+	end
+	if not blocked and not info.nododge and not info.falldamage then
+
+		local ac = FindFirstChild(character,"Action")
+		local la = FindFirstChild(character,"ChargeBlock")
+		if la and not la:FindFirstChild("NoDelete") then
+			la:Destroy()
+		end
+		local ha = FindFirstChild(character,"HeavyAttack")
+		if ha then
+			ha:Destroy()
+		end
+		if ac then
+			local ha = FindFirstChild(character,"HeavyAttack")
+			if ha then
+				ac:Destroy()
+				ha:Destroy()
+			else
+				if not FindFirstChild(ac,"NoDelete")then
+					ac:Destroy()
+				end
+			end
+		end
+
+	end
+
+	if not info.nododge and not knockback then
+		if blocking and(behind or info.ignoreblock)then
+			if info.blockbreak then
+				if FindFirstChild(enemy,"Parry")and not info.noparry then
+					local v1 = Instance.new("Accessory")
+					v1.Name = "COUNTERED"
+					v1.Parent = character
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(v1,0.5)
+					local v4 = Instance.new("Accessory")
+					v4.Name = "Action"
+					v4.Parent = character
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(v4,1.15)
+					root.Counter:Play()
+					root.counterparticle:Emit(50)
+					game.ReplicatedStorage.Requests.ScreenFlip:FireClient(Player)
+					return
+				end
+			end
+			blocking:Destroy()
+		end
+		if not blocked then
+			local stun = 0.35
+			local dodged = false
+			if FindFirstChild(enemy,"WindDodges")and not info.nododge and not info.knockback and not blocking and not enemy:FindFirstChild("CurseBlocking") and not info.bypassfischdodge then
+				if enemy.WindDodges.Value > 0 then
+					stun = 0.2
+					create("Stun",0.2,enemy)
+					enemy.WindDodges.Value-=1
+					info.nohitanim = true
+					eroot.ColdWind:Play()
+					info.damage = 0
+					dodged = true
+					task.spawn(function()
+						local old = enemy.Torso.Transparency
+						for i = 0,0.3,0.1 do
+							if enemy.Torso.Transparency ~= old then
+								break
+							end
+							changetransparency(enemy,i)
+							old = enemy.Torso.Transparency
+							wait(0.0455)
+						end
+						wait()
+						for i = 0.3,0,-0.1 do
+							if enemy.Torso.Transparency ~= old then
+								break
+							end
+							changetransparency(enemy,i)
+							old = enemy.Torso.Transparency
+							wait(0.0455)
+						end
+						changetransparency(enemy,0)
+					end)
+				else-- dodge regen
+					task.spawn(function()
+						local started = tick()
+						local olddodges = enemy.WindDodges.Value
+						task.wait(65)
+						if not enemy:IsDescendantOf(game)or not enemy:FindFirstChild'WindDodges'then
+							return
+						end
+						if enemy.WindDodges.Value == olddodges then
+							while enemy.WindDodges.Value < 4 and enemy.WindDodges.Value == olddodges and enemy:FindFirstChild("LastHit") do
+								if tick()-started < tick()-enemy.LastHit.Value then
+									break
+								end
+								olddodges = enemy.WindDodges.Value+1
+								enemy.WindDodges.Value += 1
+								wait(4.75)
+							end
+						end
+					end)
+				end
+			end
+			if not info.nododge then
+				if info.slash then
+					if info.churchpull then
+						if FindFirstChild(enemy,"SpellBlocking") then
+						else
+							bodyvelocitycheck(enemy)
+							local bp = Instance.new("BodyPosition")
+							bp.Name = "PULLING"
+							CollectionService:AddTag(bp, "AllowedBM")
+							bp.Position = (root.Position+root.CFrame.LookVector*3)
+							bp.MaxForce = Vector3.new(1e+06, 1e+06, 1e+06)
+							bp.P = 10000
+							bp.D = 500
+							bp.Parent = eroot
+							if not _G.Debris then repeat task.wait() until _G.Debris end
+							_G.Debris:AddItem(bp,1.3)
+						end
+					end
+					if FindFirstChild(enemy,"SpellBlocking") then
+						if not info.manabreaker and not info.daggerthrow then
+							if character:FindFirstChild("RecentBlockBack") then
+								return
+							end
+							eroot.SpellBlock:Play()
+							create("RecentBlockBack",0.75,character)
+							create("ChargeBlock", 0.85, enemy)
+							if character.Head.Transparency ~= 1 then
+								eroot.Orb.Transparency = 0
+
+								TweenService:Create(eroot.Orb,TweenInfo.new(0.5),{Transparency = 0.75}):Play()
+							end
+							if EnemyPlayer and (table.find(_G.MageClasses, enemydata.Class.Value) or enemydata.Skills.Value:find("MageShield")) then
+								if not plantedcheck(enemy)then
+									knockback = true
+									bodyvelocitycheck(character)
+									create("Knocked", 2, character)
+									local bv = Instance.new("BodyVelocity")
+									CollectionService:AddTag(bv,"AllowedBM")
+									bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+									bv.Velocity = root.CFrame.lookVector.unit*-50+Vector3.new(0,50,0)
+									bv.Parent = root
+									eroot.SpellBlock:Play()
+									if not _G.Debris then repeat task.wait() until _G.Debris end
+									_G.Debris:AddItem(bv,0.7)
+								end
+							end
+							return
+						elseif info.manabreaker then
+							cancellingthat = true
+							local manashieldtween
+							knockback = false
+							if blocking then
+								blocking:Destroy()
+							end
+							if FindFirstChild(enemy,"CurseBlocking")then
+								local m = FindFirstChild(enemy,"SpellBlocking")
+								local c = FindFirstChild(enemy,"CurseBlocking")
+								eroot.ShieldDown:Play()
+								if m then
+									m:Destroy()
+								end
+								if c then
+									c:Destroy()
+								end
+								if manashieldtween then
+									manashieldtween:Pause()
+									manashieldtween = nil
+								end
+								local orb = eroot.Orb
+								manashieldtween = TweenService:Create(orb.Mesh,TweenInfo.new(0.2,Enum.EasingStyle.Linear,Enum.EasingDirection.In),{Scale = Vector3.new(0,0,0)})
+								manashieldtween:Play()
+								orb.Attachment.ParticleEmitter.Enabled = false
+							end
+							for _,v in pairs(ehumanoid:GetPlayingAnimationTracks())do
+								v:Stop()
+							end
+						end
+					end
+				end
+				if info.knockup and info.PlanetaryAxe then
+					knockback = true
+					bodyvelocitycheck(enemy)
+					create("Knocked", 2, enemy)
+					local v2 = Instance.new("ObjectValue")
+					v2.Name = "LandedShoryuExcept"
+					v2.Value = enemy
+					v2.Parent = character
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(v2,2)
+					local bv = Instance.new("BodyVelocity")
+					CollectionService:AddTag(bv,"AllowedBM")
+					bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+					bv.Velocity = Vector3.new(0,200,0)
+					bv.Parent = eroot
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(bv,0.3)
+					local FreezeRoot = FindFirstChild(enemy,"FreezeRoot")if FreezeRoot then
+						FreezeRoot:Destroy()
+					end
+					task.wait(0.2)
+					for i,v in pairs(character:GetChildren()) do 
+						if v:IsA("Accessory") and v.Name == "Stun" then
+							v:Destroy()
+						end
+					end
+				end
+				if info.knockup and info.tenchiattempt then
+					if not plantedcheck(enemy)then
+						bodyvelocitycheck(enemy)
+						create("Knocked", 4, enemy)
+						--local v2 = Instance.new("ObjectValue")
+						--v2.Name = "LandedShoryuExcept"
+						--v2.Value = enemy
+						--v2.Parent = character
+						--_G.Debris:AddItem(v2,1)
+						local bv = Instance.new("BodyVelocity")
+						CollectionService:AddTag(bv,"AllowedBM")
+						bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+						bv.Velocity = Vector3.new(0,100,0)
+						bv.Parent = eroot
+						_G.Debris:AddItem(bv,0.5)
+						local FreezeRoot = FindFirstChild(enemy,"FreezeRoot")if FreezeRoot then
+							FreezeRoot:Destroy()
+						end
+						task.wait(0.6)
+						game.ReplicatedStorage.Requests.RampageStuff:FireClient(EnemyPlayer,true,enemy.Torso)
+						game.ServerStorage.Requests.TagHumanoid:Fire(enemy,enemy,{damage = 30,nododge = true,downbypass = true,fist = true,physical = true,bypassfischdodge = true,})
+						local Sounde = game.ServerStorage.Classes.Rampage.FinishSound:Clone();
+						Sounde.Parent = enemy.HumanoidRootPart;
+						Sounde.Volume = 3
+						Sounde:Play();
+						enemy.Torso.Anchored = true
+						create("Immortal",5,character)
+						create("TPSafe",5,character)
+						create("Stun",5,character)
+						create("NoFall",5,character)
+						create("NoFall",5,enemy)
+						enemy.HumanoidRootPart.ONIATTACHMENT.Particle:Emit(1)
+						local sound = Instance.new("Sound")
+						sound.Name = "TenchiMisogiVoice"
+						sound.SoundId = "rbxassetid://11255072214"
+						sound.Parent = character.HumanoidRootPart
+						sound.Volume = 2
+						sound:Play()
+						local animationnew = Instance.new("Animation")
+						animationnew.Name = "MisogiDownv2"
+						animationnew.AnimationId = "rbxassetid://11258803293"
+						animationnew.Parent = character.HumanoidRootPart
+						local animationloaded = character.Humanoid:LoadAnimation(animationnew)
+						animationloaded:Play()
+						local sound2 = Instance.new("Sound")
+						sound2.Name = "TenchiShot"
+						sound2.SoundId = "rbxassetid://11255142142"
+						sound2.Parent = character.HumanoidRootPart
+						sound2.Volume = 1.5
+						sound2:Play()
+						_G.Debris:AddItem(sound,4)
+						_G.Debris:AddItem(animationnew,4)
+						_G.Debris:AddItem(sound2,4)
+						local v39, v40, v41 = workspace:FindPartOnRayWithIgnoreList(Ray.new(enemy.Torso.Position, Vector3.new(0, 3, 0)), { workspace.Live, workspace.MonsterSpawns, workspace.Ingredients, workspace.Thrown })
+						local v42 = CFrame.new(enemy.Torso.Position) + Vector3.new(0, -2, 0)
+						if v39 and v39.CanCollide then
+							v42 = CFrame.new(v40) - Vector3.new(0, 3, 0)
+						end
+						character:PivotTo(v42)
+						local v43 = Instance.new("BodyVelocity")
+						game.CollectionService:AddTag(v43, "AllowedBM")
+						v43.Velocity = Vector3.new(0, -50, 0)
+						v43.MaxForce = Vector3.new(0, 10000, 0)
+						v43.Parent = character.HumanoidRootPart
+						_G.Debris:AddItem(v43,0.2)
+						task.wait(0.3)
+						if FindFirstChild(character,"Stun") then
+							character:FindFirstChild("Stun"):Destroy()
+						end
+						enemy.Torso.Anchored = false
+						task.wait(0.35)
+						animationloaded:Stop()
+						game.ReplicatedStorage.Requests.RampageStuff:FireClient(EnemyPlayer,false,enemy.Torso)
+					end
+				end
+				if info.knockup and info.shoryu then
+					if not plantedcheck(enemy)then
+						knockback = true
+						bodyvelocitycheck(enemy)
+						create("Knocked", 2, enemy)
+						local v2 = Instance.new("ObjectValue")
+						v2.Name = "LandedShoryuExcept"
+						v2.Value = enemy
+						v2.Parent = character
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(v2,1)
+						local bv = Instance.new("BodyVelocity")
+						CollectionService:AddTag(bv,"AllowedBM")
+						bv.MaxForce = Vector3.new(1000000,1000000,1000000)
+						bv.Velocity = Vector3.new(0,80,0)
+						bv.Parent = eroot
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(bv,0.3)
+						local FreezeRoot = FindFirstChild(enemy,"FreezeRoot")if FreezeRoot then
+							FreezeRoot:Destroy()
+						end
+						task.wait(0.2)
+						for i,v in pairs(character:GetChildren()) do 
+							if v:IsA("Accessory") and v.Name == "Stun" then
+								v:Destroy()
+							end
+						end
+					end
+				end
+				if info.misogi then
+					create("Knocked", 2, enemy)
+				end
+				if info.PickUpTilt then
+					if not plantedcheck(enemy) then
+
+						bodyvelocitycheck(enemy)
+						bodyvelocitycheck(character)
+
+						local bp = Instance.new("BodyPosition",enemy.HumanoidRootPart)
+						CollectionService:AddTag(bp,"AllowedBM")
+						bp.P = 500
+						bp.MaxForce = Vector3.new(99999999,99999999,99999999)
+						bp.D = 45
+						bp.Position = enemy.HumanoidRootPart.Position+Vector3.new(0,10,0)
+						game.Debris:AddItem(bp,1.5)
+
+						local bp2 = Instance.new("BodyPosition",character.HumanoidRootPart)
+						game:GetService('CollectionService'):AddTag(bp2,"AllowedBM")
+						bp2.P = 500
+						bp2.MaxForce = Vector3.new(99999999,99999999,99999999)
+						bp2.D = 45
+						bp2.Position = character.HumanoidRootPart.Position+Vector3.new(0,10,0)
+						game.Debris:AddItem(bp2,1.5)
+
+
+					end
+				end
+
+				if info.strongknockback then
+					if not plantedcheck(enemy) and not (info.iselbow and enemy:FindFirstChild("SpellBlocking")) then
+						knockback = true
+						bodyvelocitycheck(enemy)
+						create("Knocked", 2.2, enemy)
+						local bv = Instance.new("BodyVelocity")
+						CollectionService:AddTag(bv,"AllowedBM")
+						bv.MaxForce = Vector3.new(1000000,0,1000000)
+						bv.Velocity = root.CFrame.lookVector.unit* (knockm + 16)
+						bv.Parent = eroot
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(bv,0.7)
+					end
+				end
+
+				if info.florescoPoison then
+					stun *= 1.2
+				end
+				if not dodged then
+					if not info.noknockback and (not dodged) and (not knockback) and (not info.knockback) and (not info.blockbreak) and (not info.daggerthrow) and (not info.droar) and (not info.snarvin) and info.physical then
+						hitknockback(root,eroot)
+					end
+					if info.fist then
+						local iswind = FindFirstChild(enemy, "WindDodges")
+						local iswindamount = 0
+						if iswind  then
+							iswindamount = enemy.WindDodges.Value
+						end
+						stun = 0.25
+						if info.electric then
+							stun = 0.8
+						end
+						if info.denjinelectric then
+							stun = 0.5
+						end
+						if info.smitestun then
+							stun = 1.2
+						end
+						if info.spinm2 then
+							stun = 0.5
+						end
+						if info.spinm2oni then
+							stun = 1
+						end
+						if info.usingrising then
+							stun = 0.35
+						end
+						if info.flipM2 then
+							stun = 0.5 
+						end
+						if info.denjinelectric and info.nomonkshield then
+							stun = 1.2
+						end
+						if info.denjinelectric2 and info.nomonkshield then
+							stun = 0.6
+						end
+
+						if info.risingm2 then
+							stun = 1.3
+						end
+						if not info.droar then
+							if Player and Player:FindFirstChild("Backpack") then
+								if Player.Backpack:FindFirstChild("ChiBlock") and not (info.iselbow or info.snarvin) and character.Mana.Value >= 5 then
+									if iswindamount < 1 then
+										soundplay(eroot,"ManaPunch")
+										FindFirstChild(eroot,"ManaStopParticle"):Emit(20)
+										create("ManaStop",5,enemy)
+									end
+								elseif Player.Backpack:FindFirstChild("ChiBlock") and (info.iselbow or info.snarvin) and not blocking then
+									if iswindamount < 1 then
+										soundplay(eroot,"ManaPunch")
+										FindFirstChild(eroot,"ManaStopParticle"):Emit(20)
+										create("ManaStop",5,enemy)
+									end
+								end
+							end
+						end
+						if (info.manastop or info.snarvin or info.iselbow or info.dsagem2) and not info.blockbreak and not info.blacksmithm1 then
+							soundplay(eroot,"ManaPunch")
+							FindFirstChild(eroot,"ManaStopParticle"):Emit(20)
+							create("ManaStop",0.15,enemy)
+						else 
+							if info.demonhit then
+								FindFirstChild(eroot,"DemonHit"):Emit(3)
+							end
+							soundplay(eroot,"Hit")
+							FindFirstChild(eroot,"Hit1"):Emit(3)
+						end
+					elseif info.rapier then
+						stun = 0.175
+						soundplay(eroot,"SwordHit")
+						FindFirstChild(eroot,"BloodHit"):Emit(20)
+					elseif info.norpsword then
+						stun = 0.37
+						soundplay(eroot,"norpGreatswordHit")
+						FindFirstChild(eroot,"BloodHit"):Emit(20)
+					elseif info.givestun then
+						stun = 0.3
+					elseif info.dagger then
+						stun = 0.1 -- // this the dagger stun
+						if not info.daggerthrow and not info.nobackstab then
+							if info.isdaggerm1 and playerdata.PrimaryWeapon.Value == "Tanto" then
+								stun = 0.22
+							end
+							if behind then
+								if not info.daggerthrow and not info.nobackstab then
+									if info.damage then
+										info.damage *= 1.7
+									end
+								end
+							end
+						end
+						soundplay(eroot,"DaggerHit")
+						FindFirstChild(eroot,"BloodHit"):Emit(20)
+					elseif info.sword then
+						stun = 0.35
+						if info.gutsm1 then 
+							stun = 0.50
+						end
+						if info.Vanguard1 then 
+							stun = 0.50
+						end
+						
+						if info.shatteringhit then
+							stun = 0.85
+						end
+						if info.shattering then
+							enemy.HumanoidRootPart.Sputter:Play()
+							enemy.HumanoidRootPart.Bleed:Emit(60)
+							create("Stun",0.5,enemy)
+						end
+						soundplay(eroot,"SwordHit")
+						if info.sigilice then
+							local slowdown = Instance.new("NumberValue")
+							slowdown.Value = -3.5
+							slowdown.Name = "SpeedBoost"
+							slowdown.Parent = enemy.Boosts
+							if not _G.Debris then repeat task.wait() until _G.Debris end
+							_G.Debris:AddItem(slowdown,2)
+							eroot.IceHit:Play()
+							eroot.SigilIceHit:Emit(6)
+							commands.StopBurn(enemy)
+						elseif info.sigilthunder then
+							stun = 0.4
+							info.damage *= .9
+							
+							if info.chargedblow then
+								stun = 0.55
+								task.spawn(function()
+									u4.Lightning(eroot.CFrame*CFrame.new(0,20,0).Position,eroot.Position,1,2,"White")
+									--game.ReplicatedStorage.Effects:FireAllClients("Sparks", {Position = eroot.Position})
+								end)
+								if FindFirstChild(character, "Action") then
+									character.Action:Destroy()
+								end
+								if FindFirstChild(character, "HeavyAttack") then
+									character.HeavyAttack:Destroy()
+								end
+
+							end
+							if info.currentprop then
+								info.currentprop.LightningHit:Play()
+							end
+							eroot.Lightning:Emit(5)
+						elseif info.sigilflame then
+							commands.StartBurn(enemy,eroot,nil,nil,character)
+							if info.currentprop then
+								info.currentprop.FireHit:Play()
+							end
+							eroot.SigilFireHit:Emit(5)
+						elseif info.sigilwhitefire then
+							commands.StartBurn(enemy,eroot,Color3.fromRGB(255,255,255),{WhiteFire = true},character)
+							if info.currentprop then
+								info.currentprop.FireHit:Play()
+							end
+							if not enemy:FindFirstChild("SigilWF") then
+								create("SigilWF", false, enemy)
+							end
+							eroot.SigilWhiteFireHit:Emit(5)
+						end
+						if FindFirstChild(character,"SigilBuff")and character.SigilBuff.Value =="BlackFlame"then
+							local burncolor = Color3.new(0,0,0)
+							local manainfo = {}
+							manainfo.manastop = true
+							manainfo.wraithfire = true
+							commands.StartBurn(enemy,eroot,burncolor,manainfo,character)
+						end
+						eroot:FindFirstChild("BloodHit"):Emit(20)
+					elseif info.spear then
+						stun = 0.35
+						soundplay(eroot,"SpearHit")
+						FindFirstChild(eroot,"BloodHit"):Emit(20)
+						if info.spearmovestack and enemy:FindFirstChild("LastHit") then
+							if tick()-enemy.LastHit.Value<0.25  then
+								cancelknockback = true
+							end
+						end
+
+						if info.subzero and not enemy:FindFirstChild("MonsterInfo") then
+							info.injury = "frostbite"
+							if not enemydata.Injuries.Value:find(info.injury) then
+								enemydata.Injuries.Value = enemydata.Injuries.Value..",Frostbite"
+							end
+							create("BurnCooldown",5,enemy)
+							create("AntiBurn", 7, enemy)
+							commands.StopBurn(enemy)
+							eroot.IceHit:Play()
+						end
+					elseif info.katana then
+						stun = 0.35
+						soundplay(eroot,"SwordHit")
+						FindFirstChild(eroot,"BloodHit"):Emit(20)
+						if info.tanjirom1 then 
+							eroot.HolyClash:Play()
+							eroot.HolyEmit:Emit(9)
+							if info.damage and game.CollectionService:HasTag(enemy,"Vampirism")then
+								info.damage*=1.1
+								print(info.damage)
+								create("NoRegen", 7, enemy)
+								create("AntiVampirism", 7, enemy)
+							end
+						end
+						if info.isclap then
+								stun = 1
+								task.spawn(function()
+									u4.Lightning(eroot.CFrame*CFrame.new(0,20,0).Position,eroot.Position,1,2,"New Yeller")
+								end)
+								if FindFirstChild(character, "Action") then
+									character.Action:Destroy()
+								end
+								if FindFirstChild(character, "HeavyAttack") then
+									character.HeavyAttack:Destroy()
+								end
+
+						end
+						if info.zenitsuthunder then
+							stun = 0.55
+							if info.currentprop then
+								info.currentprop.LightningHit:Play()
+							end
+							eroot.Lightning:Emit(5)
+						end
+					end	
+				end
+				if not blocked and not info.nododge and not FindFirstChild(enemy,"Planted") and not info.nohitanim and not info.nostun then
+					for _,v in pairs(ehumanoid:GetPlayingAnimationTracks())do
+						if not v.Looped and not info.noanimationcancel then
+							v:Stop()
+						end
+					end
+					local minfo = enemy:FindFirstChild("MonsterInfo")
+					if minfo then
+						if minfo:FindFirstChild("MonsterType") and enemy.MonsterInfo.MonsterType.Value ~= "Zombie Scroom" and enemy.MonsterInfo.MonsterType.Value ~= "Howler" and enemy.MonsterInfo.MonsterType.Value ~= "Howwgy" and enemy.MonsterInfo.MonsterType.Value ~= "Terra Serpent" and enemy.MonsterInfo.MonsterType.Value ~= "Ice Dragon" and enemy.MonsterInfo.MonsterType.Value ~= "Golem King" and enemy.MonsterInfo.MonsterType.Value ~= "Golem Turret" then
+							ehumanoid:LoadAnimation(combatanims["Hit"..math.random(1,4)]):Play()
+						end
+					else
+						if not info.torture2 and not info.nohitanim then
+							ehumanoid:LoadAnimation(combatanims["Hit"..math.random(1,4)]):Play()
+						end
+					end
+				end
+			end
+			if info.angergrab then
+				create("Knocked", 3, enemy)
+				if character:FindFirstChild("LandedAngerGrabExcept") == nil then
+					local v2 = Instance.new("ObjectValue")
+					v2.Name = "LandedAngerGrabExcept"
+					v2.Value = enemy
+					v2.Parent = character
+					_G.Debris:AddItem(v2,4.5)
+				end	
+			end
+			if info.droar then
+				stun = 0.35
+			end
+			if info.daggerthrow then
+				stun = 0
+			end	
+			if info.noknockback then
+				knockback = false
+				info.knockback = nil
+				info.strongknockback = nil
+			end
+			if info.smallknockback and not cancellingthat then
+				if not plantedcheck(enemy) then
+
+					if not info.specialrag then
+						create("Knocked", 1, enemy)
+					else
+						create("Knocked", info.specialrag, enemy)
+					end
+					if not cancelknockback then
+						knockback = true
+						local bv = Instance.new("BodyVelocity")
+						CollectionService:AddTag(bv,"AllowedBM")
+						bodyvelocitycheck(enemy)
+						bv.MaxForce = Vector3.new(1000000,0,1000000)
+						bv.Velocity = root.CFrame.lookVector.unit * 35
+						bv.Parent = eroot
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(bv,0.7)
+					end
+				end
+			end
+			if info.knockback and not cancellingthat then
+				if not plantedcheck(enemy) then
+
+					if not info.specialrag then
+						create("Knocked", 1, enemy)
+					else
+						create("Knocked", info.specialrag, enemy)
+					end
+					if not cancelknockback then
+						knockback = true
+						local bv = Instance.new("BodyVelocity")
+						CollectionService:AddTag(bv,"AllowedBM")
+						bodyvelocitycheck(enemy)
+						bv.MaxForce = Vector3.new(1000000,0,1000000)
+						bv.Velocity = root.CFrame.lookVector.unit * knockm
+						bv.Parent = eroot
+						if not _G.Debris then repeat task.wait() until _G.Debris end
+						_G.Debris:AddItem(bv,0.7)
+
+						task.spawn(function()
+							local T = tick()
+
+							while true do				
+
+								local h, p, sf = ray(eroot.CFrame.Position,  eroot.CFrame.lookVector * -5)
+								if h and h.CanCollide and h.Anchored and sf then
+
+									if not enemy:FindFirstChild("WALLSLAMCD") then
+
+										create("WALLSLAMCD",1.5,enemy)
+										WallSlamEffect(p,h,sf)
+
+									end
+
+									eroot.CFrame = eroot.CFrame
+									bv.Velocity = Vector3.new(0, 0, 0)
+
+									if bv then
+										bv:Destroy()
+									end
+
+									break
+								end
+
+								if (tick() - T) > .7 then
+									break
+								end
+
+								task.wait()
+							end
+
+							bv:Destroy()
+						end)
+						
+						
+					end
+				end
+			end
+		
+			if playerdata and CheckRace(game.ServerStorage.PlayerData[character.Name], 'Azael') and math.random(1,25) == 1 and not info.noenchant then
+				commands.StartBurn(enemy,eroot,nil,nil,character)
+			end
+			if info.lastweaponm1 then 
+				task.spawn(function()
+					local Dw = require(game.ServerScriptService.WorldHandler.Deepwoken)
+					Dw.Edenkite(character,enemy)
+				end)
+			end
+			if info.ragdoll and typeof(info.ragdoll) == "number" then
+				local t = info.ragdoll
+				create("Knocked", t, enemy)
+			end
+			if info.immortal and typeof(info.immortal) == "number" then
+				local t = info.immortal
+				create("Immortal", t, enemy)
+			end
+			if character:FindFirstChild("ShinobiRuby") then
+				if not (info.noenchant) then
+					commands.StartBurn(enemy,eroot,nil,nil,character)
+				end
+			end
+			if not info.physical then
+				info.noenchant = true
+			end
+			if not (info.noenchant) then
+				if (playerdata) then
+					local val = playerdata.PrimaryWeapon.Value or "None"
+					local val2 = playerdata.Enchant.Value or ""
+					local no = false
+					if (playerdata.PrimaryWeapon.Value~="Caestus"and info.fist) and not info.blacksmithm1 then
+						no = true
+					end
+					if info.daggerthrow then
+						no = true
+					end
+					if not (no) and not info.noenchant then
+						if val2 ~= "" then
+							if not info.noenchant then
+								if val2 == "Ruby" then
+									if info.damage and math.random(1,10)<=1+(info.damage*0.15) then
+										commands.StartBurn(enemy,eroot,nil,nil,character)
+									end
+								end
+
+								if val2 == "Emerald" then
+									if info.damage and math.random(1,10)<=1+(info.damage*0.15) then
+										game.ServerStorage.Requests.TagHumanoid:Fire(enemy,enemy,{poison = true,nododge = true})
+									end
+								end	
+									
+								if val2 == "Dark" then
+									if info.damage and math.random(1,20)<=1+(info.damage*0.25) then
+										if not FindFirstChild(enemy,"NoRegenCD") then
+											create("NoRegen", 8, enemy)
+											create("NoRegenCD", 16, enemy)
+										end
+										commands.StartBurn(enemy,eroot,Color3.new(0, 0, 0),nil,character)
+									end
+								end
+
+
+								if val2 =="Azure" then
+									if info.damage and math.random(1,15)<=1+(info.damage*0.25) then
+										local manainfo = {}
+										manainfo.azure = true
+										commands.StartBurn(enemy,eroot,Color3.new(0.113725, 0.776471, 0.92549),manainfo,character)
+									end
+								end
+								
+								--[[if val2 =="Blazing" then
+									if info.damage and math.random(1,15)<=1+(info.damage*0.15) then
+									  if not FindFirstChild(enemy,"Burning") then
+										create("Burning", 7, enemy)
+									  end if game.Lighting.ClockTime <= 17.6 and game.Lighting.ClockTime >= 6.3 then
+										commands.StartBurn(enemy,eroot,Color3.new(0.737255, 0.270588, 0.054902),manainfo,character)
+									end
+								end]]
+								
+								if val2 =="Blazing"  then
+								  if not FindFirstChild(enemy,"Burn") then 
+									info.damage = info.damage * 1.1
+								  end
+									 if FindFirstChild(enemy, "Burn") then
+										info.damage = info.damage * 1.3
+									 end
+									if info.damage and math.random(1,10)<=1+(info.damage*1.1) then
+									commands.StartBurn(enemy,eroot,Color3.new(0.866667, 0.415686, 0.0941176),nil,character)
+									end
+								end
+								
+								if val2 == "Blanco" then
+									if info.damage and math.random(1,20)<=2+(info.damage*0.25) then
+										if not FindFirstChild(enemy,"White Fire") then
+											create("White Fire", 8, enemy)
+											create("NoRegenCD", 16, enemy)
+										end
+										commands.StartBurn(enemy,eroot,Color3.new(1, 1, 1),nil,character)
+									end
+								end
+								
+								--[[if val2 =="x" then
+									if info.damage and math.random(5,20)<=2+(info.damage*0.25) then
+										if not FindFirstChild(enemy, "White Fire")
+										create("White Fire", 8, enemy)
+									end
+										commands.StartBurn(enemy,eroot,Color3.new(1, 1, 1),manainfo,character)
+								end]]
+
+
+								if val2 =="SunGem" then
+									if character.Humanoid.Health >= character.Humanoid.MaxHealth * 0.50 then
+										info.damage = info.damage * 1.40
+									end
+								end
+
+								if val2 =="Glory" then
+									if playerdata then
+										local rankval = 116
+										if Player.leaderstats:FindFirstChild("Rank") and Player.leaderstats:FindFirstChild("Rank").Value ~= 0 then
+											rankval = Player.leaderstats.Rank.Value
+											print(rankval)
+										end
+										local reverseRank = 131 - rankval
+										print(reverseRank)
+										info.damage *= math.clamp((reverseRank / 100), 0.9, 1.3)
+									end
+								end		
+
+								if val2 =='Umbral' then
+									if math.random(1,8) <= 2 then
+										local ThingThing = info.damage / 100 + 25
+										require(game.ServerScriptService.WorldHandler.Deepwoken).Umbral(enemy,ThingThing)
+									end
+								end
+
+								if val2 =="Curse of the Bloodthirsty"  then
+									info.damage = info.damage * 1.3
+								end
+
+								if val2 =="Heroism" then
+									if character.Humanoid.Health >= character.Humanoid.MaxHealth * 0.75 then
+										info.damage = info.damage * 1.35
+									elseif character.Humanoid.Health <= character.Humanoid.MaxHealth * 0.25 then
+										info.damage = info.damage * 1.35
+									end
+								end
+								
+
+								if val2 =="Astral" then
+									if game.Lighting.ClockTime >= 17.6 and game.Lighting.ClockTime <= 6.3 then
+										info.damage = info.damage * 2.5
+									elseif game.Lighting.ClockTime <= 17.6 and game.Lighting.ClockTime >= 6.3 then
+										info.damage = info.damage * 1.25
+									end
+								end
+								if val2 == "DevAstral"  then
+									info.damage = info.damage * 7.4
+								end
+			
+								if val2 =="Solar" then
+									if game.Lighting.ClockTime <= 17.6 and game.Lighting.ClockTime >= 6.3 then
+										info.damage = info.damage * 1.15
+									end
+								end
+								
+								if val2 =="Lunar" then
+									if game.Lighting.ClockTime >= 17.6 and game.Lighting.ClockTime <= 6.3 then
+										info.damage = info.damage * 1.15
+									end
+								end
+
+
+								if val2 =="Gluttony" then
+									if not FindFirstChild(enemy,"NoHunger") then
+										enemy.Stomach.Value = math.clamp(enemy.Stomach.Value-info.damage, 0, humanoid.MaxHealth)
+										game.ReplicatedStorage.Requests.GluttonyHit:FireClient(EnemyPlayer)
+										if not character:FindFirstChild("NoHunger") then
+											if playerdata.Vampire.Value == true then
+												character.Stomach.Value = math.clamp(character.Stomach.Value + (info.damage * 0.35), 0, character.Humanoid.MaxHealth)
+											else
+												character.Stomach.Value = math.clamp(character.Stomach.Value + (info.damage), 0, character.Humanoid.MaxHealth)
+											end
+										end
+									end
+								end
+
+								if val2 == "Wild" then
+									require(game.ServerScriptService.WorldHandler.Deepwoken).WildAoe(enemy.HumanoidRootPart.Position,character,enemy,info.damage)
+								end
+
+								if val2 == "Detonation" then
+									require(game.ServerScriptService.WorldHandler.Deepwoken).Detonate(Player,enemy)
+								end
+								
+								if val2 == "Yun'Shul" then
+									if info.damage and math.random(1,10) <= 2 then
+										if not character:FindFirstChild("Yun'ShulCD") then
+											create("Yun'ShulCD",10,character)
+											if math.random(1,12) >= 10 then -- Self
+												local selfDamage = (character.Humanoid.Health / 10)
+												game.ServerStorage.Requests.TagHumanoid:Fire(enemy,character,{damage = selfDamage,noenchant = true,bypassfischdodge = true,nododge = true,ignoreblock = true,bypassblock = true})
+											else -- Enemy
+												local damageBonus = (character.Humanoid.MaxHealth / 100) * 5
+												game.ServerStorage.Requests.TagHumanoid:Fire(character,enemy,{damage = damageBonus,noenchant = true,bypassfischdodge = true,nododge = true,ignoreblock = true,bypassblock = true})
+											end  
+										end
+									end
+								end
+								
+								if val2 == "Storm" then
+									if info.damage and math.random(1,7) <= 2 then
+										stun = stun * 1.35
+										info.damage = info.damage * 1.05
+										eroot.LightningBurst:Play()
+										eroot.StormEnchant:Emit(10)
+										require(game.ServerScriptService.WorldHandler.Deepwoken).StormSlash(eroot)
+									end
+								end
+								
+								if val2 == "StormBreaker" then
+									if info.damage and math.random(1,15) <= 2 then
+										stun = stun * 1.25
+										info.damage = info.damage * 1.05
+										require(game.ServerScriptService.WorldHandler.Deepwoken).StormBreakerSlash(eroot)
+									end
+								end
+
+
+								if val2 == "Grim" then
+									if info.damage then
+										require(game.ServerScriptService.WorldHandler.Deepwoken).GrimProc(Player,enemy)
+									end
+								end
+
+								if val2 == "Vampirism" then
+									local HealthToGive: number = info.damage / 5
+									if humanoid.Health + HealthToGive < humanoid.MaxHealth then
+										humanoid.Health += HealthToGive
+										soundplay(eroot,"SoulSlurp2")
+										soundplay(eroot,"ShadowDrainSound")
+									else
+										humanoid.Health = humanoid.MaxHealth
+									end
+								end
+								
+								if val2 == "Elastic" then
+									if info.damage and math.random(1,8)<=1+(info.damage*0.1) then
+										local Target = enemy
+										local Start = character
+										local Bungee = script["Bungee Gum"]:Clone()
+										Bungee.Parent = workspace
+										Bungee.BeamHit.Parent = Target.HumanoidRootPart
+										Bungee.Anchored = true
+										Bungee.BeamStart.Parent = Start["Right Arm"]
+										for _,v in pairs(Bungee:GetChildren()) do
+											if v:IsA("Beam") then
+												v.Enabled = true
+											end
+										end
+										if Start:FindFirstChild("Torso") then
+											local Torso = script.Torso:Clone()
+											Torso.Torso.Part1 = Target.Torso
+											Torso.Torso.Part0 = Torso
+											Torso.Parent = workspace
+											if not _G.Debris then repeat task.wait() until _G.Debris end
+											_G.Debris:AddItem(Torso, 2)
+										end
+										bodyvelocitycheck(enemy)
+										if not _G.Debris then repeat task.wait() until _G.Debris end
+										_G.Debris:AddItem(Bungee, 2)
+										coroutine.wrap(function()
+											local bpos = Instance.new("BodyPosition")
+											CollectionService:AddTag(bpos, "AllowedBM")
+											bpos.Parent = enemy.HumanoidRootPart
+											bpos.Position = (character.PrimaryPart.Position + character.PrimaryPart.CFrame.lookVector * 3) + Vector3.new(0,0.2,0)
+											bpos.D = 500
+											bpos.MaxForce = Vector3.new(60000,60000,60000)
+											bpos.P = 10000
+											if not _G.Debris then repeat task.wait() until _G.Debris end
+											_G.Debris:AddItem(bpos,1)
+										end)()
+									end
+								end
+
+								if val2 == "Chilling" then
+									if info.damage and math.random(1,13) <= 2 then
+										if not enemy:FindFirstChild('IceCase') then
+											local Stun = Instance.new("Accessory")
+											Stun.Name = "Stun"
+											Stun.Parent = enemy
+											if not _G.Debris then repeat task.wait() until _G.Debris end
+											_G.Debris:AddItem(Stun, 1.25)
+
+											local icecase = game.ServerStorage.SpellEffects.FireWhip.IceCase:Clone()
+											icecase.CFrame = eroot.CFrame
+											icecase.Weld.Part0 = eroot
+											icecase.Weld.Part1 = icecase
+											icecase.Parent = enemy
+											if not _G.Debris then repeat task.wait() until _G.Debris end
+											_G.Debris:AddItem(icecase,2)
+										end
+									end
+								end
+
+								if val2 == "Deferred" then
+									Deferred = true
+								end
+
+								if val2 == "Nemesis" then
+									if info.damage then
+
+										if not enemy:FindFirstChild(character.Name.."NemesisTag") and not enemy:FindFirstChild(character.Name.."NemesisCD") then
+											create(character.Name.."NemesisTag",30,enemy)
+											create(character.Name.."NemesisCD",15,enemy)
+											local NemesisFx = game.ServerStorage.Assets.NemesisFx
+											local MarkSound = NemesisFx["Mark"]:Clone()
+											local Effect = NemesisFx["Part"]["Attachment"]:Clone()
+											if enemy:FindFirstChild("HumanoidRootPart") then
+												MarkSound.Parent = enemy["HumanoidRootPart"]
+												MarkSound:Play()
+												game.Debris:AddItem(MarkSound,1.3)
+												Effect.Parent = enemy["HumanoidRootPart"]
+												Effect.Name = character.Name.."NemesisEffect"
+												game.Debris:AddItem(Effect,30)
+											end
+										end
+
+									end
+								end
+
+								if val2 =="Opal" and not info.noenchant then
+									eroot.HolyClash:Play()
+									eroot.HolyEmit:Emit(9)
+									if info.damage and game.CollectionService:HasTag(enemy,"Vampirism")then
+										info.damage*=1.1
+										create("NoRegen", 7, enemy)
+										create("AntiVampirism", 7, enemy)
+									end
+
+								end
+								if val2 =="Sapphire" then
+									if info.damage and math.random(1,15)<=1+(info.damage*0.2) then
+										local da = 0
+										for i,v in pairs(enemy.Boosts:GetChildren()) do
+											if v.Name == "SpeedBoost" and v.Value < 0 then
+												da += 1
+											end
+										end
+										if da < 4 then
+											local slowdown = Instance.new("NumberValue")
+											slowdown.Value = -3
+											slowdown.Name = "SpeedBoost"
+											slowdown.Parent = enemy.Boosts
+											if not _G.Debris then repeat task.wait() until _G.Debris end
+											_G.Debris:AddItem(slowdown,30)
+										end
+										eroot.IceHit:Play()
+										eroot.SigilIceHit:Emit(6)
+									end
+								end
+								if val2 =="FrostFlame" then
+									if info.damage and math.random(1,10)<=1+(info.damage*0.15) then
+										commands.StartBurn(enemy,eroot,nil,nil,character)
+										local da = 0
+										for i,v in pairs(enemy.Boosts:GetChildren()) do
+											if v.Name == "SpeedBoost" and v.Value < 0 then
+												da += 1
+											end
+										end
+										if da < 4 then
+											local slowdown = Instance.new("NumberValue")
+											slowdown.Value = -5
+											slowdown.Name = "SpeedBoost"
+											slowdown.Parent = enemy.Boosts
+											if not _G.Debris then repeat task.wait() until _G.Debris end
+											_G.Debris:AddItem(slowdown,30)
+										end
+									end
+								end
+
+
+								if val2 == "Diamond" then
+									if info.damage and math.random(1,25)<=1+(info.damage*0.2) then
+										stun = stun * 1.5
+										eroot.LightningBurst:Play()
+										eroot.LightningEnchant:Emit(5)
+									end
+								end
+								if val2 == "Nightstone" then
+									if EnemyPlayer then
+										game.ReplicatedStorage.Requests.NightStoneHit:FireClient(EnemyPlayer)
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+			if dodged then
+				stun /= 2
+			end
+			if info.stunA and typeof(info.stunA) == "number" then
+				stun = info.stunA
+			end
+			if not info.falldamage and not enemy:FindFirstChild("NoStun") then
+				if not info.nohitanim then
+					if not info.nostun and not enemy:FindFirstChild("NoStun") and not info.torture2 then
+						create("ClimbCooldown", 1.25, enemy)
+						create("Stun", stun + 0.05, enemy)
+						create("NoDash", 0.85, enemy)
+						create("NoJump", 0.85, enemy)
+						create("ChargeBlock", 0.85, enemy)
+					end
+					if info.bypassblock and not enemy:FindFirstChild("MonShield") then
+						create("noblockcancel", 0.2, enemy)
+					end
+					if not info.nohitanim and not info.nostun then
+						create("NoDash", 0.85, enemy)
+						if not info.snarvin then
+							create("NoDam", 0.6, enemy)
+						elseif info.snarvin and enemy:FindFirstChild("SpellBlocking") then
+							create("NoDam", 0.2, enemy)
+						end
+						if not enemy:FindFirstChild("NoStun") then
+							create("Stun", 0.2, enemy)
+						end
+					end
+				end
+			end
+		end
+	end
+	if info.poison and not enemy:FindFirstChild("MonsterInfo") then
+		local poisoning = true
+		if enemydata and CheckRace(enemydata, 'Gaian') then
+			poisoning = false
+		end
+		if enemydata and CheckRace(enemydata, 'Lich') then
+			poisoning = false
+		end
+		if enemydata and CheckRace(enemydata, 'Scroom') then
+			poisoning = false
+		end
+		if enemydata and CheckRace(enemydata, 'Dullahan') then
+			poisoning = false 
+		end
+		if enemydata and CheckRace(enemydata, 'Metascroom') then
+			poisoning = false
+		end
+		if EnemyPlayer and EnemyPlayer.Backpack:FindFirstChild("Nature Mastery") or enemy:FindFirstChild("Nature Mastery") then
+			poisoning = false
+		end
+		if enemy:FindFirstChild("Blocking")then
+			poisoning = false
+		end
+		if not enemy:FindFirstChild("Poisoned") and poisoning then
+			eroot.Poison:Play()
+			eroot.PoisonParticle:Emit(20)
+			local v1 = Instance.new("Accessory")
+			v1.Name = "Poisoned"
+			v1.Parent = enemy
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(v1,10)
+			task.spawn(function(): ()
+				local totaldam: number = ehumanoid.MaxHealth/16
+				local damage = totaldam/20
+				for i: number = 1,20 do
+					wait(0.2)
+					game.ServerStorage.Requests.TagHumanoid:Fire(enemy,enemy,{damage = damage, posioncheck = true,nododge = true,nobuff = true, noenchant = true})
+					eroot.PoisonParticle:Emit(8)
+					create("NoRegen", 0.2, enemy)
+				end
+				create("PoisonPitCD", 0.6, enemy)
+				if v1 then
+					v1:Destroy()
+				end
+			end)
+		end
+	end
+	if info.bleed and not enemy:FindFirstChild("MonsterInfo") then
+		local bleeding = true
+		if enemydata and CheckRace(enemydata, 'Gaian') then
+			bleeding = false
+		end
+		if enemydata and CheckRace(enemydata, 'Lich') then
+			bleeding = false
+		end
+		if enemydata and CheckRace(enemydata, 'Scroom') then
+			bleeding = false
+		end
+		if enemydata and CheckRace(enemydata, 'Dullahan') then
+			bleeding = false 
+		end
+		if enemydata and CheckRace(enemydata, 'Metascroom') then
+			bleeding = false
+		end
+		if enemy:FindFirstChild("Blocking")then
+			bleeding = false
+		end
+		if not enemy:FindFirstChild("bleed") and bleeding then
+			local v1 = Instance.new("Accessory")
+			v1.Name = "Bleeding"
+			v1.Parent = enemy
+			if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(v1,10)
+			task.spawn(function(): ()
+				local totaldam: number = ehumanoid.MaxHealth/32
+				local damage = totaldam/64
+				for i: number = 1,64 do -- it shouldnt do too much dmg......
+					wait(0.2)
+					game.ServerStorage.Requests.TagHumanoid:Fire(enemy,enemy,{damage = damage,nododge = true,nobuff = true, noenchant = true})
+					create("NoRegen", 0.2, enemy)
+				end
+				if v1 then
+					v1:Destroy()
+				end
+			end)
+		end
+	end
+	if info.falldamage then
+		if not info.damage then
+			info.damage = 1
+		end
+		if info.damage < 0 then 
+			shared.PostDiscordMessage("Exploit",Player.Name .. " Tried to god mode","cyan")
+			_G.PSlots[Player]["Banned"] = true
+			Player:Kick("You've been banned from the game")
+			return
+		end
+		local knockedhealth: number = humanoid.Health * 2
+		if FindFirstChild(enemy, "Dissolved") then
+			for i,v in pairs(enemy:GetChildren()) do
+				if v.Name == "Dissolved" then
+					task.wait()
+					v:Destroy()
+				end
+			end
+		end
+		for i,v in pairs(character:GetChildren()) do
+			if v.Name == "HeavyAttack" or v.Name == "Action" then
+				v:Destroy()
+			end
+		end
+		if info.damage>knockedhealth then
+			info.executes = true
+		end
+
+		if info.damage < 20 and not character:FindFirstChild("FeatherFall") then
+			root.LightFall:Play()
+		end
+
+		if info.damage > 20 and not character:FindFirstChild("FeatherFall") then
+			if not character:FindFirstChild("InjuryCooldown") then
+				root.Fall:Play()
+			end
+			if info.damage >= humanoid.Health + 5 and info.damage < knockedhealth then
+				info.injury = "leg"
+			elseif info.damage < 80 then
+				if not CheckRace(playerdata, 'Cameo') then
+					create("Knocked",info.damage/15,character)
+				else
+					create("Knocked",1,character)
+				end
+			elseif info.damage > 80 then
+				if not CheckRace(playerdata, 'Cameo') then
+					create("Knocked",7,character)
+				else
+					create("Knocked",0.25,character)
+				end
+			elseif info.damage >= knockedhealth then
+				_G.Death(Player)
+			end
+		elseif info.damage > 40 and character:FindFirstChild("FeatherFall") then
+			if not character:FindFirstChild("InjuryCooldown") then
+				root.Fall:Play()
+			end
+			if info.damage >= humanoid.Health + 5 and info.damage < knockedhealth then
+				info.injury = "leg"
+			elseif info.damage < 80 then
+				if not CheckRace(playerdata, 'Cameo') then
+					create("Knocked",info.damage/15,character)
+				else
+					create("Knocked",1,character)
+				end
+			elseif info.damage > 80 then
+				if not CheckRace(playerdata, 'Cameo') then
+					create("Knocked",7,character)
+				else
+					create("Knocked",1,character)
+				end
+			elseif info.damage >= knockedhealth then
+				_G.Death(Player)
+			end
+		end
+	end
+	if info.injury and not enemy:FindFirstChild("MonsterInfo")then
+		local ignore: boolean = false
+		if info.injury == "frostbite"then
+			local no = false
+			if info.spear and blocking then
+				no = true
+			end
+			if not no then
+				commands.StopBurn(enemy)
+				local icecase = game.ServerStorage.SpellEffects.FireWhip.IceCase:Clone()
+				icecase.CFrame = eroot.CFrame
+				icecase.Weld.Part0 = eroot
+				icecase.Weld.Part1 = icecase
+				icecase.Parent = enemy
+				if not FindFirstChild(enemy, "SpellBlocking") then
+					create("Knocked",1.3,enemy)
+				end
+				task.delay(1.3, function()
+					icecase:Destroy()
+					if not FindFirstChild(enemy, "SpellBlocking") then
+						if enemy.Humanoid.Health > 10 then
+							enemy.Humanoid:TakeDamage(10)
+						else
+							enemy.Humanoid.Health = 1
+						end
+						wait()
+						for i,v in pairs(enemy:GetChildren()) do
+							if v.Name == "WakingUp" then
+								task.wait()
+								v:Destroy()
+							end
+						end
+						create("Knocked",2,enemy)
+						local bv = Instance.new("BodyVelocity")
+						CollectionService:AddTag(bv, "AllowedBM")
+						bv.MaxForce = Vector3.new(0, 250000, 0)
+						bv.Velocity = eroot.CFrame.lookVector.unit * -50
+						bv.Name = "FlingVelocity"
+						bv.Parent = eroot
+						task.delay(0.5, function() bv:Destroy() end)
+					end
+				end)
+				ignore = true
+				create("Frostbitten",60,enemy)
+			end
+		end
+		local injurecd = false
+		if not enemy:FindFirstChild("InjuryCooldown")or ignore then
+			injurecd = true
+			if info.injury == "leg" and not enemy:FindFirstChild("Unprotect") then
+				if not enemydata.Injuries.Value:find("brokenleg") then 
+					enemydata.Injuries.Value = enemydata.Injuries.Value..",brokenleg"
+					eroot.Injury:Play()
+					local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+					injury.Parent = eroot
+					injury:Emit(3)
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(injury,1.5)
+				end	
+			else
+				eroot.Injury:Play()
+				local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+				injury.Parent = eroot
+				injury:Emit(3)
+				if not _G.Debris then repeat task.wait() until _G.Debris end
+				_G.Debris:AddItem(injury,1.5)
+			end
+			if EnemyPlayer then
+				local danger = enemy:FindFirstChild("Danger")or Instance.new("NumberValue",EnemyPlayer)
+				danger.Name = "Danger"
+				if danger.Value+45<120 then
+					danger.Value+=30
+				else
+					danger.Value = 120
+				end
+			end
+		end
+		if info.injury == "chestgash" and not enemy:FindFirstChild("MonsterInfo") then
+			if not blocking then
+				if not enemy:FindFirstChild("ImpaleCD") and not enemydata.Injuries.Value:find(info.injury)then
+					create("ImpaleCD",20,enemy)
+					create("NoRegen",10,enemy)
+					if not enemydata.Injuries.Value:find("chestgash") and (not FindFirstChild(EnemyPlayer.Backpack, "SlashResistance")) or CheckRace(enemydata, 'Kasparan') then
+						enemydata.Injuries.Value = enemydata.Injuries.Value..",chestgash"
+					end
+				end
+			end
+		elseif info.injury == "leg"then
+			if not enemy:FindFirstChild("InjuryCooldown") and FindFirstChild(enemy, "Unprotect") then
+				injurecd = true
+				eroot.Bonebreak:Play()
+				if not enemydata.Injuries.Value:find("brokenleg") then 
+					enemydata.Injuries.Value = enemydata.Injuries.Value..",brokenleg"
+					eroot.Injury:Play()
+					local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+					injury.Parent = eroot
+					injury:Emit(3)
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(injury,1.5)
+				end	
+			end
+			if FindFirstChild(enemy, "Unprotect") then
+				create("Knocked",1.5,enemy)
+				eroot.Bonebreak:Play()
+				if not enemydata.Injuries.Value:find("brokenleg") then 
+					enemydata.Injuries.Value = enemydata.Injuries.Value..",brokenleg"
+					eroot.Injury:Play()
+					local injury = game.ReplicatedStorage.Assets.Injure:Clone()
+					injury.Parent = eroot
+					injury:Emit(3)
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(injury,1.5)
+				end	
+			else
+				create("Unprotect", false, enemy)
+			end
+		elseif info.injury == "spine"then
+			if not enemy:FindFirstChild("InjuryCooldown") then
+				injurecd = true
+				eroot.Bonebreak:Play()
+			end
+			create("Knocked",2,enemy)
+		end
+		if injurecd then
+			local f = Instance.new("Accessory") f.Name = "InjuryCooldown" f.Parent = enemy if not _G.Debris then repeat task.wait() until _G.Debris end
+			_G.Debris:AddItem(f,1)
+		end
+	end
+	if info.shriekerhit then
+		local MonsI = character:FindFirstChild("MonsterInfo")
+		if MonsI and MonsI.Master.Value and game.Players:GetPlayerFromCharacter(MonsI.Master.Value) and game.Players:GetPlayerFromCharacter(MonsI.Master.Value).Backpack:FindFirstChild("ShriekerHeal") and not enemy:FindFirstChild("Blocking") then
+			character.MonsterInfo.Master.Value.Humanoid.Health += 8
+		end
+	end
+	if info.damage then
+		if not info.isdeferred then
+			if info.physical and FindFirstChild(character,"HaseldanDamageMultiplier")then
+				info.damage *= 1.25
+			end
+			if info.physical and FindFirstChild(character,"SSJDamageMultiplier")then
+				info.damage *= 1.5
+			end
+			if not info.nobuff then
+				local cursecount = getCurseCount(enemy)
+				if cursecount > 0 then
+					if playerdata and playerdata.Class.Value ~= "Master Necromancer" then
+						info.damage *= math.clamp(1 + (cursecount * 0.2), 1, 2) 
+					else
+						info.damage *= math.clamp(1 + (cursecount * 0.15), 1, 1.6) 
+					end	
+				end
+				local grimcursecount = getGrimCurse(enemy)
+				if grimcursecount > 0 then
+					info.damage *= math.clamp(1 + (grimcursecount * 0.15), 1, 1.2)
+					print(info.damage)
+				end
+			end
+			if FindFirstChild(character,"LifeSteal") and info.damage then
+				local toheal: number = info.damage / 4
+				if humanoid.Health + toheal < humanoid.MaxHealth then
+					humanoid.Health += toheal
+				else
+					humanoid.Health = humanoid.MaxHealth
+				end
+			end
+			if enemy ~= character then
+				if character.LegendaryArtifacts:FindFirstChild("ShapedGlass") then
+					if info.damage >= 30 then
+						info.damage *= 1.3
+					elseif info.damage >= 20 and info.damage < 30 then
+						info.damage *= 1.5
+					elseif info.damage >= 10 and info.damage < 20 then
+						info.damage *= 1.8
+					else
+						info.damage *= 2
+					end
+				end
+				if enemydata and CheckRace(enemydata, 'Dracula') then
+					info.damage *= 0.80
+				end
+				if enemy.Boosts:FindFirstChild("Defense") then
+					for _,v in enemy.Boosts:GetChildren() do
+						if v.Name == "Defense" and v:IsA("NumberValue") then --Damage cutoff, make sure defense is set to a decimal.
+							info.damage *= v.Value
+						end
+					end
+				end
+				if character.Boosts:FindFirstChild("Damage") then
+					for _,v in character.Boosts:GetChildren() do
+						if v.Name == "Damage" and v:IsA("NumberValue") then --Damage multiplier, any number is acceptible (nerfs below 1)
+							info.damage *= v.Value
+						end
+					end
+				end
+			end
+		end
+		--print(typeof(info.damage), typeof(ehumanoid.Heath), debug.traceback())
+		
+		if ehumanoid.Health - info.damage > 3 or (enemy:FindFirstChild("MonsterInfo") and (enemy.MonsterInfo.MonsterType.Value == "Howler" or enemy.MonsterInfo.MonsterType.Value == "Terra Serpent" or enemy.MonsterInfo.MonsterType.Value == "Zombie Scroom" or enemy.MonsterInfo.MonsterType.Value == "Howwgy" or enemy.MonsterInfo.MonsterType.Value == "Ice Dragon"  or enemy.MonsterInfo.MonsterType.Value == "Golem King" or enemy.MonsterInfo.MonsterType.Value == "Golem Turret")) then
+			if info.didhitreturn then
+				anyreturn = true
+			end
+			if character ~= enemy and Player and info.physical then
+				if Player.Backpack:FindFirstChild("DrawEnergy") then
+					local gain = info.EGain or 7.5
+					character.Energy.Value = math.clamp(character.Energy.Value + (gain), 0, 100)
+				end
+			end
+
+			if not Deferred  then
+				
+				if enemy:FindFirstChild("Rings") and enemy:FindFirstChild("Rings"):FindFirstChild("Ishiin's Ring") then
+					ehumanoid.Health -= info.damage * 1.40
+				else
+					ehumanoid.Health -= info.damage
+				end
+				
+			else
+				for i= 1, 10 do
+					local dmg = info.damage / 10
+			
+					game.ServerStorage.Requests.TagHumanoid:Fire(character,enemy,{damage = dmg,nododge = true,nobuff = true,nofocusparry = true, isdeferred = true})
+					if enemy:FindFirstChild("NoRegen") or enemy:FindFirstChild("NoRegenCD") then
+
+					else
+						create("NoRegen", 7, enemy) -- gives them no regen at all for half of the duration of the hit.
+						create("NoRegenCD",7, enemy)
+					end
+					task.wait(.25)
+				end
+			end
+
+		else
+			if enemy.LegendaryArtifacts:FindFirstChild("ShapedGlass") and not FindFirstChild(enemy,"FreezeRoot") then
+				pcall(function()
+					for _,v in pairs(enemy:GetDescendants()) do
+						if v:IsA("BasePart") or v:IsA("Decal") then
+							v.Transparency = 0
+							if v:IsA("BasePart") then
+								v.Anchored = true
+							end
+						elseif v:IsA("ParticleEmitter") or v:IsA("Texture") or v:IsA("Sound") then
+							v:Destroy()
+						end
+					end
+				end)
+				game.ReplicatedStorage.Requests.ShapedDeath:FireAllClients(enemy.HumanoidRootPart)
+				pcall(function()
+					create("Danger",30,EnemyPlayer)
+				end)
+				enemy:BreakJoints()
+				enemy.Humanoid.Health = 0
+				_G.Death(enemy,character)
+				return
+			end
+			
+			if info.donotknock then
+				ehumanoid.Health = 0.1
+				return
+			end
+
+			if (not enemy:FindFirstChild("MonsterInfo") or (enemy:FindFirstChild("MonsterInfo") and enemy.MonsterInfo.MonsterType.Value == "Shrieker")) or (enemy:FindFirstChild("MonsterInfo") and (enemy.MonsterInfo.MonsterType.Value ~= "Howler" and enemy.MonsterInfo.MonsterType.Value ~= "Terra Serpent" and enemy.MonsterInfo.MonsterType.Value ~= "Zombie Scroom" and enemy.MonsterInfo.MonsterType.Value ~= "Howwgy" and enemy.MonsterInfo.MonsterType.Value ~= "Ice Dragon" and enemy.MonsterInfo.MonsterType.Value ~= "Golem King" and enemy.MonsterInfo.MonsterType.Value ~= "Golem Turret")) then
+				if enemy:FindFirstChild("CantBeKnocked") then
+					print("ahh u mad")
+				else
+					ehumanoid.Health = 3
+					create("Knocked", 10, ehumanoid.Parent)
+				end
+			end
+			if not enemydata or (enemydata and not CheckRace(enemydata, 'Cameo')) or enemydata or (enemydata and not CheckRace(enemydata, 'TrueCameo')) then
+				if enemy:FindFirstChild("CantBeKnocked") then
+					print("ahh u mad")
+				else
+					local v2 = Instance.new("Accessory")
+					v2.Name = "Unconscious"
+					v2.Parent = ehumanoid.Parent
+					if not _G.Debris then repeat task.wait() until _G.Debris end
+					_G.Debris:AddItem(v2,10)
+				end
+			elseif enemydata and CheckRace(enemydata, 'Cameo') or enemydata and CheckRace(enemydata, 'TrueCameo') then
+					enemydata.Injuries.Value = ""
+					if not enemy:FindFirstChild("NoLoss") then
+						enemydata.Lives.Value-=1
+						if enemydata.Lives.Value <= 0 then
+							_G.Death(enemy, character)
+						end
+					end
+					enemy.Humanoid.PlatformStand = false
+					enemy.Humanoid.AutoRotate = true
+					if not enemy:FindFirstChild("NoLoss") then
+						create("NoLoss", 5, enemy)
+					end
+					for _,v in pairs(workspace.Live:getChildren())do
+						if v ~= enemy and v:FindFirstChild("HumanoidRootPart")then
+							if (enemy.HumanoidRootPart.Position-v.HumanoidRootPart.Position).Magnitude<11 then
+								game.ServerStorage.Requests.TagHumanoid:Fire(v,v,{mana = true,manaknockupself = true})
+							end
+						end
+					end
+					wait()
+
+
+					for _,v in pairs(enemy:GetChildren())do
+						if v.Name == "Knocked"or v.Name == "Unconscious"or v.Name == "Action"or v.Name == "NoDam"or v.Name == "FreezeRoot"then
+							v:Destroy()
+						end
+					end
+
+					enemy.HumanoidRootPart.Cameo:Emit(75)
+					enemy.HumanoidRootPart.CameoGetUp:Play()
+					enemy.Humanoid.Health += enemy.Humanoid.MaxHealth
+					enemy.HumanoidRootPart.LightningHit:Play()
+				end
+			end
+		end
+	if info.falldamage and not info.injury then
+		return
+	end
+	if FindFirstChild(character.Artifacts,"Bloodring") and info.damage then
+		local Healthback: number = info.damage / 1.6
+		if humanoid.Health + Healthback < humanoid.MaxHealth then
+			humanoid.Health += Healthback
+		else
+			humanoid.Health = humanoid.MaxHealth
+		end
+	end
+	if enemy:FindFirstChild("LastHit")then
+		enemy.LastHit.Value = tick()
+	end
+	if EnemyPlayer and character~=enemy or EnemyPlayer and info.falldamage then
+		if not info.nocombattag then
+			local danger = enemy:FindFirstChild("Danger")or Instance.new("NumberValue",EnemyPlayer)
+			danger.Name = "Danger"
+			if danger.Value + 30 < 120 then
+				danger.Value += 30
+			else
+				danger.Value = 120
+			end
+		end
+	end
+	return anyreturn
+end
+game.ServerStorage.Requests.TagHumanoid.Event:Connect(taghumanoid)
+
+_G.RemoteTag = taghumanoid -- for returning
