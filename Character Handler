@@ -1735,6 +1735,52 @@ local function unblock(p,bypass)
 		blocking:Destroy()
 	end
 end
+
+table.insert(Connections,
+	Remotes.Sprint.OnServerEvent:Connect(function(plr, a)
+		if plr ~= Player then return end
+		if a then
+			-- Prevents sprinting while mana charging
+			if Character:FindFirstChild("Charge") then return end
+
+			if not Character:FindFirstChild("Sprinting") then
+				local sprint = Instance.new("Accessory")
+				sprint.Name = "Sprinting"
+				sprint.Parent = Character
+
+				local children = GetChildren(Character)
+				for i = 1, #children do
+					local v = children[i]
+					if v.Name == "SpellBlocking" or v.Name == "MonShield" then
+						task.wait()
+						manashielddown()
+						unblock(Player)
+					end
+				end
+				table.clear(children)
+
+				task.spawn(function()
+					for i = 1, 4 do
+						if Character:FindFirstChild("SpellBlocking") then
+							task.wait()
+							manashielddown()
+							unblock(Player)
+						end
+						if Character:FindFirstChild("MonShield") then
+							task.wait()
+							manashielddown()
+							unblock(Player)
+						end
+						task.wait(0.01)
+					end
+				end)
+			end -- THIS IS THE MAGIC 'END' THAT STOPS THE LAG!
+		else
+			local sprint = Character:FindFirstChild("Sprinting")
+			if sprint then sprint:Destroy() end
+		end
+	end)
+)
 local lastmanashield = tick()
 
 table.insert(Connections,
@@ -1843,29 +1889,22 @@ table.insert(Connections,
 local LastCharge = tick()
 
 table.insert(Connections,
-	Remotes.ManaCharge.OnServerEvent:Connect(function(p,Value)
+	Remotes.ManaCharge.OnServerEvent:Connect(function(p, Value)
 		local Char = p.Character
-		if not Char or Char~=Character then
-			return
-		end
+		if not Char or Char ~= Character then return end
+
 		if Value then
-			if tick()-LastCharge >= 0.2 then
-				if not FindFirstChild(Character,"ActionManaBypass") then
-					if StunCheck(p,{"ChargeBlock","HeavyAttack","Stun","Blocking","SpellBlocking","CurseBlocking"})then
-						return
-					end
-					if FindFirstChild(Character, "Action") and not FindFirstChild(Character, "ActionManaBypass") then
-						return
-					end
-					if HasTag(CollectionService,Character,"Casting") or FindFirstChild(Character,"ActiveCast")then
-						return
-					end
-					if FindFirstChild(Character,"ManaStop")then
-						return
-					end
+			-- Prevents mana charging while sprinting
+			if Character:FindFirstChild("Sprinting") then return end
+
+			if tick() - LastCharge >= 0.2 then
+				if not Character:FindFirstChild("ActionManaBypass") then
+					if StunCheck(p, {"ChargeBlock","HeavyAttack","Stun","Blocking","SpellBlocking","CurseBlocking"}) then return end
+					if Character:FindFirstChild("Action") and not Character:FindFirstChild("ActionManaBypass") then return end
+					if HasTag(CollectionService, Character, "Casting") or Character:FindFirstChild("ActiveCast") then return end
+					if Character:FindFirstChild("ManaStop") then return end
 				end
 
-				-- [[ THE FIX: Only create the tag if it doesn't already exist! ]]
 				if not Character:FindFirstChild("Charge") then
 					local Charge = Instance.new("Accessory")
 					Charge.Name = "Charge"
@@ -1873,12 +1912,8 @@ table.insert(Connections,
 				end
 			end
 		else
-			-- [[ THE FIX: Destroys ALL ghost charge tags cleanly ]]
-			for _, v in pairs(Character:GetChildren()) do
-				if v.Name == "Charge" then
-					v:Destroy()
-				end
-			end
+			local charge = Character:FindFirstChild("Charge")
+			if charge then charge:Destroy() end
 		end
 	end)
 )
@@ -2144,14 +2179,13 @@ table.insert(Connections,
 		if p ~= Player then
 			return p:Kick()
 		end
-		if tonumber(Value)then
-		else
-			Player:Kick("good job!")
+
+		-- The Absolute Math Fix (Forces negative fall velocity to be positive)
+		local fallSpeed = math.abs(tonumber(Value) or 0)
+		if fallSpeed <= 0 then
+			return 
 		end
-		if Value > 0 then
-		else
-			Player:Kick("good job!")
-		end
+
 		if tick() - lastReq <= 0.1 then
 			susp = susp+1
 			if susp >= 10 then
@@ -2162,33 +2196,30 @@ table.insert(Connections,
 			susp = 0
 		end
 		lastReq = tick()
-		if not Humanoid then
-			return
-		end
-		if FindFirstChild(Character,"NoFall")then	
-			return
-		end
+
+		if not Humanoid then return end
+		if Character:FindFirstChild("NoFall") then return end
+
 		local FallDamageReduction = 1
 		if Player.Backpack:FindFirstChild("FeatherFall")then
 			FallDamageReduction -= 1.5
 		end
 
-		-- [[ NEW: ACROBAT MUTATION CHECK ]]
 		if PlayerData:FindFirstChild("Mutation") and PlayerData.Mutation.Value == "Acrobat" then
-			FallDamageReduction -= 0.75 -- Reduces their fall damage drastically!
+			FallDamageReduction -= 0.75 
 		end
-		-- [[ END NEW ]]
 
 		for i,v in pairs(Boosts:GetChildren()) do
 			if v.Name == "FallResist" and (v:IsA("IntValue") or v:IsA("NumberValue")) then
 				FallDamageReduction -= v.Value
 			end
 		end
+
 		FallDamageReduction = math.clamp(FallDamageReduction,0.25,1)
-		local damage = (Value/75*30)*FallDamageReduction
-		local manabody = false
+		local damage = (fallSpeed/75*30)*FallDamageReduction
+
 		local falltable = {
-			damage = manabody == true and damage / 1.2 or damage,
+			damage = damage,
 			falldamage = true,
 			downbypass = true,
 			nododge = true,
@@ -4533,51 +4564,57 @@ if InvisHeads[Race.Value] then
 end
 
 table.insert(Connections,
-	Remotes.Sprint.OnServerEvent:Connect(function(plr, a)
-		if plr ~= Player then
-			return
+	Remotes.FallDamage.OnServerEvent:Connect(function(p,Value)
+		if p ~= Player then
+			return p:Kick()
 		end
-		if a then
-			-- [[ THE FIX: Only spawn it if you don't already have it! ]]
-			if not Character:FindFirstChild("Sprinting") then
-				local sprint = Instance.new("Accessory")
-				sprint.Name = "Sprinting"
-				sprint.Parent = Character
-			end
 
-			local children = GetChildren(Character)
-			for i = 1,#children do
-				local v = children[i]
-				if v.Name == "SpellBlocking" or v.Name == "MonShield" then
-					task.wait()
-					manashielddown()
-					unblock(Player)
-				end
+		-- THE FIX: Forces negative velocity to be positive so the game doesn't kick you!
+		local fallSpeed = math.abs(tonumber(Value) or 0)
+		if fallSpeed <= 0 then
+			return 
+		end
+
+		if tick() - lastReq <= 0.1 then
+			susp = susp+1
+			if susp >= 10 then
+				p:Kick()
 			end
-			table.clear(children)
-			spawn(function()
-				for i = 1,4 do
-					if FindFirstChild(Character, "SpellBlocking") then
-						task.wait()
-						manashielddown()
-						unblock(Player)
-					end
-					if FindFirstChild(Character, "MonShield") then
-						task.wait()
-						manashielddown()
-						unblock(Player)
-					end
-					wait(0.01)
-				end
-			end)
-		else
-			-- [[ THE FIX: Destroy ALL ghost sprinting tags just in case! ]]
-			for _, v in pairs(Character:GetChildren()) do
-				if v.Name == "Sprinting" then
-					v:Destroy()
-				end
+			return
+		elseif tick() - lastReq > 0.35 then
+			susp = 0
+		end
+		lastReq = tick()
+
+		if not Humanoid then return end
+		if FindFirstChild(Character,"NoFall") then return end
+
+		local FallDamageReduction = 1
+		if Player.Backpack:FindFirstChild("FeatherFall")then
+			FallDamageReduction -= 1.5
+		end
+
+		if PlayerData:FindFirstChild("Mutation") and PlayerData.Mutation.Value == "Acrobat" then
+			FallDamageReduction -= 0.75 
+		end
+
+		for i,v in pairs(Boosts:GetChildren()) do
+			-- THE FIX: Accepts NumberValues for dodges!
+			if v.Name == "FallResist" and (v:IsA("IntValue") or v:IsA("NumberValue")) then
+				FallDamageReduction -= v.Value
 			end
 		end
+
+		FallDamageReduction = math.clamp(FallDamageReduction,0.25,1)
+		local damage = (fallSpeed/75*30)*FallDamageReduction
+
+		local falltable = {
+			damage = damage,
+			falldamage = true,
+			downbypass = true,
+			nododge = true,
+		}
+		TagHumanoid:Fire(Character,Character, falltable)
 	end)
 )
 table.insert(Connections,
@@ -4770,6 +4807,7 @@ local SeraphIgnore = {
 	["The Shaped Arena"] = true,
 
 }
+
 task.spawn(function()
 	task.wait(5)
 	if Race.Value == "Seraph" or Race.Value == "GreaterSeraph" or Race.Value == "LunarSeraph" and PlayerData.Lives.Value > 0 and not SeraphIgnore[PlayerData.Area.Value] then
